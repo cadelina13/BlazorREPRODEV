@@ -1,0 +1,170 @@
+﻿@page "/students"
+@code {
+    UserAccount user = new UserAccount();
+
+    List<RegisteredStudent> listofregistered;
+    HubConnection hubConnection;
+    protected override async Task OnInitializedAsync()
+    {
+        user = await Core.GetInstance().GetUser(localStorage);
+        hubConnection = new HubConnectionBuilder().WithUrl($"{nav.BaseUri}hubs/applicationHub").WithAutomaticReconnect().Build();
+        if(hubConnection.State != HubConnectionState.Connected) await hubConnection.StartAsync();
+        hubConnection.On<string>("NotifyRegisteredStudentPage", async (userType) =>
+        {
+            if (user != null)
+            {
+                if (user.UserType == userType)
+                {
+                    await loadStudentRecord();
+                    StateHasChanged();
+                }
+            }
+
+        });
+        await loadStudentRecord();
+    }
+
+    async Task loadStudentRecord()
+    {
+        listofregistered = null;
+        await Task.Delay(1000);
+        listofregistered = await http.GetFromJsonAsync<List<RegisteredStudent>>($"api/GetRegisteredStudent");
+    }
+    async Task ShowDialogAddStudent()
+    {
+        var d = dialog.Show<DialogAddStudent>("New Student", new DialogOptions() { MaxWidth = MaxWidth.Small });
+        var rs = await d.Result;
+        if (!rs.Cancelled)
+        {
+            snackbar.Add("New student has been saved.");
+            if(user != null)
+            {
+                await hubConnection.SendAsync("NotifyRegisteredStudentPage", user.UserType);
+            }
+            StateHasChanged();
+        }
+    }
+
+    async Task AcceptStudent(Guid Id)
+    {
+        await http.GetAsync($"api/AcceptStudent/{Id.ToString()}");
+        if (user != null)
+        {
+            await hubConnection.SendAsync("NotifyRegisteredStudentPage", user.UserType);
+        }
+    }
+    async Task DenyStudent(Guid Id)
+    {
+        await http.GetAsync($"api/DenyStudent/{Id.ToString()}");
+        if (user != null)
+        {
+            await hubConnection.SendAsync("NotifyRegisteredStudentPage", user.UserType);
+        }
+    }
+    void ShowDialogStudentProfile(UserAccount user)
+    {
+        var d = dialog.Show<DialogStudentDetails>($"Profile",
+            new DialogParameters() { ["user"] = user },
+            new DialogOptions() { MaxWidth = MaxWidth.ExtraSmall });
+    }
+}
+
+<MudText GutterBottom Typo="Typo.h5" Color="Color.Primary">Students</MudText>
+
+<div class="row">
+    @if (listofregistered == null)
+    {
+        <div class="col-xl-8">
+            <MudPaper Elevation="25" Class="mb-3 p-3">
+                <MudSkeleton Width="40%" />
+                <MudSkeleton Width="80%" />
+                <MudSkeleton Width="100%" />
+                <MudSkeleton Height="80px" Width="100%" />
+                <MudSkeleton Width="100%" />
+                <MudSkeleton Width="20%" />
+            </MudPaper>
+            
+        </div>
+        <div class="col-xl-4">
+            <MudPaper Elevation="25" Class="mb-3 p-3">
+                <MudSkeleton Width="80%" />
+                <MudSkeleton Width="100%" Class="mb-2"/>
+                <MudSkeleton Width="80%" />
+                <MudSkeleton Width="100%" />
+                <MudSkeleton Width="100%" Class="mb-2"/>
+                <MudSkeleton Width="80%" />
+                <MudSkeleton Width="100%" />
+                <MudSkeleton Width="100%" Class="mb-2"/>
+                <MudSkeleton Width="80%" />
+                <MudSkeleton Width="100%" />
+            </MudPaper>
+        </div>
+    }
+    else
+    {
+        <div class="col-xl-8">
+            <MudTable Class="mb-3" Elevation="25" Context="c" Items="@listofregistered.Where(x=>x.IsAccepted == 1).OrderByDescending(x=>x.Account.DateRegistered)" Hover="true" Breakpoint="Breakpoint.Xs">
+                <ToolBarContent>
+                    <MudText Color="Color.Primary" Typo="Typo.body1">Registered</MudText>
+                    <MudToolBarSpacer/>
+                    <MudButton OnClick="ShowDialogAddStudent" StartIcon="@Icons.Material.Outlined.Create" Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"> New</MudButton>
+                </ToolBarContent>
+                <HeaderContent>
+                    <MudTh Style="width:1%">*</MudTh>
+                    <MudTh>Name</MudTh>
+                    <MudTh>Email</MudTh>
+                    <MudTh>Online</MudTh>
+                    <MudTh>Registered</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="*" Style="width:1%">
+                        <MudIconButton OnClick="@(()=> ShowDialogStudentProfile(c.Account))" Icon="@Icons.Material.Outlined.Person" Size="Size.Small"/>
+                    </MudTd>
+                    <MudTd DataLabel="Name">@c.Account.FirstName @c.Account.LastName</MudTd>
+                    <MudTd DataLabel="Email">@c.Account.Email</MudTd>
+                    <MudTd DataLabel="Online">@(c.Account.LastLoggedIn.HasValue ? Helper.toFriendlyDate(c.Account.LastLoggedIn.Value) : "")</MudTd>
+                    <MudTd DataLabel="Registered">@Helper.toFriendlyDate(c.Account.DateRegistered)</MudTd>
+                </RowTemplate>
+                <PagerContent>
+                    <MudTablePager DisableRowsPerPage PageSizeOptions="new int[]{5, 10, 50, 100, 500}" />
+                </PagerContent>
+            </MudTable>
+        </div>
+        
+        <div class="col-xl-4">
+            <MudPaper Elevation="25" Class="mb-3 p-3">
+                <MudText Color="Color.Secondary" Typo="Typo.body1">Pending request</MudText>
+                <MudDivider Class="mt-2 mb-2" />
+                @if (listofregistered.Where(x => x.IsAccepted == 0).Count() == 0)
+                {
+                    <p class="text-center p-3">
+                        <i>No request as of now.</i>
+                    </p>
+                }
+                else
+                {
+                    <MudList Dense>
+                        @foreach (var i in listofregistered.Where(x => x.IsAccepted == 0).OrderByDescending(x => x.Account.DateRegistered).ToList())
+                        {
+                            <MudListItem Class="align-middle" Avatar="@Icons.Material.Outlined.AccountCircle" Dense>
+                                <MudToolBar Dense Class="p-0 m-0 align-middle" DisableGutters>
+                                    <p class="p-0 m-0">
+                                        <MudText Typo="Typo.body1">@i.Account.FirstName @i.Account.LastName</MudText>
+                                        <MudText Typo="Typo.caption">@Helper.toFriendlyDate(i.Account.DateRegistered)</MudText>
+                                    </p>
+                                    <MudToolBarSpacer />
+                                    <MudIconButton OnClick="@(()=> DenyStudent(i.Id))" Class="p-0 m-0" Variant="Variant.Text" Icon="@Icons.Material.Filled.DeleteSweep" Size="Size.Small" Color="Color.Secondary" />
+                                    <MudIconButton OnClick="@(()=> AcceptStudent(i.Id))" Class="p-0 m-0 ml-3" Variant="Variant.Text" Icon="@Icons.Material.Filled.Check" Size="Size.Small" Color="Color.Success" />
+                                </MudToolBar>
+                            </MudListItem>
+                        }
+                    </MudList>
+                }
+
+            </MudPaper>
+           
+        </div>
+    }
+
+</div>
+

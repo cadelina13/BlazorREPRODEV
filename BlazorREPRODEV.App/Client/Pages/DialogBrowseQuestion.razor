@@ -1,0 +1,175 @@
+﻿@code {
+    [CascadingParameter] MudDialogInstance _mudDialog { get; set; }
+    public List<Subject> listofsubjects;
+    MudChip selectedChip;
+    ComponentSubject selectedComponent;
+    [Parameter]
+    public List<ExamQuestion> data { get; set; }
+
+    List<Question> questionsToSave = new List<Question>();
+    protected override async Task OnInitializedAsync()
+    {
+        foreach (var q in data)
+        {
+            questionsToSave.Add(q.QuestionData);
+        }
+        listofsubjects = await http.GetFromJsonAsync<List<Subject>>($"api/GetSubjects");
+    }
+    void Cancel() => _mudDialog.Close(DialogResult.Cancel());
+    async Task Submit()
+    {
+        _mudDialog.Close(DialogResult.Ok(questionsToSave));
+        await InvokeAsync(StateHasChanged);
+    }
+    Func<ComponentSubject, string> converter = p => p?.Name;
+    void AddToList(Question c)
+    {
+        var IsAlreadyAdded = questionsToSave.Any(x => x == c);
+        if (IsAlreadyAdded)
+        {
+            questionsToSave.Remove(c);
+        }
+        else
+        {
+            questionsToSave.Add(c);
+        }
+        StateHasChanged();
+    }
+
+    void AddAll(List<Question> list)
+    {
+        questionsToSave.AddRange(list);
+    }
+    void SelectedChipChanged(MudChip c)
+    {
+        selectedComponent = null;
+        selectedChip = null;
+        selectedChip = c;
+        StateHasChanged();
+    }
+}
+
+<MudDialog>
+    <DialogContent>
+        @if (listofsubjects != null)
+        {
+            <div class="row">
+                <div class="col-xl-12">
+                    <MudChipSet Class="mb-3" SelectedChipChanged="SelectedChipChanged" Mandatory MultiSelection="false" Filter>
+                        @foreach (var subject in listofsubjects)
+                        {
+                            <MudChip Tag="@subject" Color="Color.Primary" Size="Size.Small" Variant="Variant.Filled" Text="@subject.Name" />
+                        }
+                    </MudChipSet>
+                </div>
+                @if (selectedChip != null)
+                {
+                    var sub = (Subject)selectedChip.Tag;
+
+                    <div class="col-xl-12">
+
+                        <MudSelect Class="ml-1" @bind-Value="selectedComponent" T="ComponentSubject" Label="Components" Strict="true" Variant="Variant.Outlined" Dense ToStringFunc="@converter">
+                            @if (sub != null)
+                            {
+                                @foreach (var component in sub.ComponentSubjects)
+                                {
+                                    <MudSelectItem T="ComponentSubject" Value="@(component)" />
+                                }
+                            }
+                        </MudSelect>
+                    </div>
+                    @if (selectedComponent != null)
+                    {
+
+                        var list = selectedComponent.Questions.Where(x => x.InActive == 0).OrderByDescending(x => x.DateCreated).ToList();
+                        <div class="col-xl-12">
+                            <MudTable Dense Context="c" Items="@list" Hover="true" Breakpoint="Breakpoint.Xs">
+                                <HeaderContent>
+                                    <MudTh>Question</MudTh>
+                                    <MudTh>Correct Answer</MudTh>
+                                    <MudTh Style="width:1%">*</MudTh>
+                                </HeaderContent>
+                                <RowTemplate>
+                                    <MudTd DataLabel="Question">@c.MyQuestion</MudTd>
+                                    <MudTd DataLabel="CorrectAnswer">@c.CorrectAnswer</MudTd>
+                                    <MudTd Style="width:1%" DataLabel="*">
+                                        @{
+                                            var IsAlreadyAdded = questionsToSave.Any(x => x.Id == c.Id);
+                                            if (IsAlreadyAdded)
+                                            {
+                                                <MudIcon Color="Color.Success" Size="Size.Small" Icon="@Icons.Material.Filled.Check"/>
+                                            }
+                                            else
+                                            {
+                                                <MudIconButton Disabled="IsAlreadyAdded" DisableElevation="IsAlreadyAdded" OnClick="@(()=> AddToList(c))" Size="Size.Small" Color="@(IsAlreadyAdded ? Color.Success : Color.Primary)" Icon="@( IsAlreadyAdded ? Icons.Material.Outlined.Check : Icons.Material.Outlined.Add)" Variant="@(Variant.Filled)" />
+                                            }
+                                        }
+                                    </MudTd>
+                                </RowTemplate>
+                                <PagerContent>
+                                    @if (list.Count > 0)
+                                                {
+
+                                        <MudToolBar Class="mb-1 mt-1">
+                                            <MudToolBarSpacer />
+                                            <MudButton Disabled="@(questionsToSave.Select(x=>x.Id).Any(x => list.Select(x=>x.Id).Contains(x)))" OnClick="@(() => AddAll(list))" DisableElevation Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled">Add @list.Count() items</MudButton>
+                                        </MudToolBar>
+                                                }
+                                                else
+                                                {
+                                        <p class="text-center p-3">
+                                            <i>No questions available.</i>
+                                        </p>
+                                                }
+                                    <MudTablePager PageSizeOptions="new int[]{5, 10, 50, 100, 500}" />
+                                </PagerContent>
+                            </MudTable>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="col-xl-12">
+                            <p class="text-center p-3">
+                                <i>No component selected.</i>
+                            </p>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="col-xl-12">
+                        <p class="text-center p-3">
+                            <i>No selected subject.</i>
+                        </p>
+                    </div>
+                }
+
+
+
+            </div>
+        }
+        else
+        {
+            <MudSkeleton Width="50%" />
+            <MudSkeleton Width="100%" />
+            <MudSkeleton Height="60px" Width="100%" />
+            <MudSkeleton Width="30%" />
+            <MudSkeleton Width="30%" />
+        }
+
+    </DialogContent>
+    <DialogActions>
+        <MudToolBar>
+            <MudText Color="Color.Secondary" Typo="Typo.body1">
+                No. selected of question: @questionsToSave.Count
+            </MudText>
+            <MudToolBarSpacer />
+        </MudToolBar>
+        <MudButton Size="Size.Small" OnClick="Cancel" Color="Color.Default" StartIcon="@Icons.Material.Filled.Cancel" Variant="Variant.Filled">
+            Cancel
+        </MudButton>
+        <MudButton Disabled="questionsToSave.Count == 0" Size="Size.Small" OnClick="Submit" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" Variant="Variant.Filled">
+            Save
+        </MudButton>
+    </DialogActions>
+</MudDialog>

@@ -1,0 +1,358 @@
+﻿@page "/q/{examId}"
+@implements IDisposable
+@code {
+    [Parameter]
+    public string examId { get; set; }
+    HubConnection hubConnection;
+    UserAccount user;
+    Exam ExamData;
+    List<ExamRecord> _examRecord;
+    ExamRecord record;
+    string countdownTimer = "00:00:00";
+    public void Dispose() => t?.Dispose();
+    protected override async Task OnInitializedAsync()
+    {
+        hubConnection = new HubConnectionBuilder().WithUrl($"{nav.BaseUri}hubs/applicationHub").WithAutomaticReconnect().Build();
+        if (hubConnection.State != HubConnectionState.Connected) await hubConnection.StartAsync();
+        if (user != null)
+        {
+            ExamData = await http.GetFromJsonAsync<Exam>($"api/GetExamDetails/{examId}");
+            if (ExamData != null)
+            {
+                string userId = user.Id.ToString();
+                _examRecord = await http.GetFromJsonAsync<List<ExamRecord>>($"api/GetExamRecord/{examId}/{userId}");
+                if (_examRecord != null && _examRecord.Count > 0)
+                {
+                    record = _examRecord.FirstOrDefault();
+                }
+                if (record != null)
+                {
+                    if (record.DateFinished.HasValue)
+                    {
+                        countdownTimer = "Finished";
+                        showFinishedImage = true;
+                        if (user != null)
+                        {
+                            if (hubConnection.State != HubConnectionState.Connected)
+                                await hubConnection.StartAsync();
+                            await hubConnection.SendAsync("NotifyToggleDrawer", user.Id.ToString());
+                        }
+                        StateHasChanged();
+                        return;
+                    }
+
+                    startExam();
+                }
+                StateHasChanged();
+            }
+        }
+    }
+    bool showFinishedImage = false;
+
+    int count = 6;
+    System.Timers.Timer t = new System.Timers.Timer();
+    void StartNowClick()
+    {
+
+        count = 5;
+        StateHasChanged();
+        t.Enabled = true;
+        t.Interval = 1000;
+        t.Elapsed += async (s, e) =>
+        {
+            if (count <= 0)
+            {
+
+                //SaveRecord();
+                t.Enabled = false;
+                var regStudent = await http.GetFromJsonAsync<RegisteredStudent>($"api/GetRegisteredStudentDetail/{user.Id}");
+                record = new ExamRecord();
+                record.Score = 0;
+                record.ExamData = ExamData;
+                record.Student = regStudent;
+                record.DateTaken = DateTime.Now;
+                var d = await http.PostAsJsonAsync<ExamRecord>($"api/SaveExamRecord", record);
+                if (d.IsSuccessStatusCode)
+                {
+                    record = await d.Content.ReadFromJsonAsync<ExamRecord>();
+                    StateHasChanged();
+                }
+                startExam();
+                t.Dispose();
+            }
+            else
+            {
+                count -= 1;
+                t.Start();
+            }
+            StateHasChanged();
+        };
+    }
+
+    async void startExam()
+    {
+        if (record != null)
+        {
+            if (user != null)
+            {
+                if (hubConnection.State != HubConnectionState.Connected)
+                    await hubConnection.StartAsync();
+                await hubConnection.SendAsync("NotifyToggleDrawer", user.Id.ToString());
+            }
+
+            GetNextQuestion();
+            var myTimer = new System.Timers.Timer();
+            myTimer.Interval = 1000;
+            myTimer.Enabled = true;
+            myTimer.Elapsed += async (s, e) =>
+            {
+                if (showFinishedImage)
+                {
+                    myTimer.Enabled = false;
+                    myTimer.Stop();
+                    myTimer.Dispose();
+                    countdownTimer = "Finished";
+                    return;
+                }
+                var totalMins = (ExamData.MinutesDuration - (DateTime.Now - record.DateTaken).TotalMinutes);
+                if (totalMins <= 0)
+                {
+                    record.DateFinished = DateTime.Now;
+                    var recordPostResult = await http.PostAsJsonAsync<ExamRecord>($"api/UpdateExamRecords/", record);
+                    if (recordPostResult.IsSuccessStatusCode)
+                    {
+                        isQuestionLoading = true;
+                        showFinishedImage = true;
+                        myTimer.Enabled = false;
+                        myTimer.Stop();
+                        myTimer.Dispose();
+                        countdownTimer = "Finished";
+                        nextQuestion = null;
+                        if (user != null)
+                        {
+                            if (hubConnection.State != HubConnectionState.Connected)
+                                await hubConnection.StartAsync();
+                            await hubConnection.SendAsync("NotifyToggleDrawer", user.Id.ToString());
+                        }
+                    }
+                    StateHasChanged();
+                    return;
+                }
+
+                var t = TimeSpan.FromMinutes(totalMins);
+                countdownTimer = $"{t.Hours.ToString("D2")}:{t.Minutes.ToString("D2")}:{t.Seconds.ToString("D2")}";
+
+                StateHasChanged();
+            };
+        }
+    }
+
+    bool isQuestionLoading = false;
+    Question nextQuestion;
+    List<string> nextAnswer = new List<string>();
+    string selectedAnswer = string.Empty;
+    async void GetNextQuestion()
+    {
+
+        isQuestionLoading = true;
+        StateHasChanged();
+        var questionsadded = await http.GetFromJsonAsync<List<ExamStudentRecord>>($"api/GetAddedQuestionsGuid/{record.Id.ToString()}");
+        if (questionsadded.Count == ExamData.ExamQuestions.Select(x => x.QuestionData).Count())
+        {
+            record.DateFinished = DateTime.Now;
+            var recordPostResult = await http.PostAsJsonAsync<ExamRecord>($"api/UpdateExamRecords/", record);
+            if (recordPostResult.IsSuccessStatusCode)
+            {
+                record = await recordPostResult.Content.ReadFromJsonAsync<ExamRecord>();
+                nextQuestion = null;
+                nextAnswer = new List<string>();
+                showFinishedImage = true;
+                countdownTimer = "Finished";
+                t.Enabled = false;
+                t.Stop();
+                t.Dispose();
+                if (user != null)
+                {
+                    if (hubConnection.State != HubConnectionState.Connected)
+                        await hubConnection.StartAsync();
+                    await hubConnection.SendAsync("NotifyToggleDrawer", user.Id.ToString());
+                }
+                StateHasChanged();
+            }
+            return;
+        }
+        nextQuestion = null;
+        nextQuestion = ExamData.ExamQuestions.Where(x => !questionsadded.Select(x => x.QuestionId).ToList().Contains(x.QuestionData.Id)).Select(x => x.QuestionData).OrderBy(x => Guid.NewGuid()).FirstOrDefault();
+        if (nextQuestion != null)
+        {
+            nextAnswer = new List<string>();
+            nextAnswer.Add(nextQuestion.Choice1);
+            nextAnswer.Add(nextQuestion.Choice2);
+            nextAnswer.Add(nextQuestion.Choice3);
+            nextAnswer.Add(nextQuestion.Choice4);
+        }
+        nextAnswer = nextAnswer.OrderBy(x => Guid.NewGuid()).ToList();
+        await Task.Delay(1000);
+        isQuestionLoading = false;
+        StateHasChanged();
+    }
+    async Task btnNextClick()
+    {
+        if (string.IsNullOrEmpty(selectedAnswer))
+            return;
+        isQuestionLoading = true;
+        StateHasChanged();
+        var regStudent = await http.GetFromJsonAsync<RegisteredStudent>($"api/GetRegisteredStudentDetail/{user.Id}");
+        var data = new ExamStudentRecord();
+        data.QuestionId = nextQuestion.Id;
+        data.IsCorrect = nextQuestion.CorrectAnswer == selectedAnswer ? 1 : 0;
+        data.ExamRecordId = record.Id;
+        var postResult = await http.PostAsJsonAsync<ExamStudentRecord>($"api/SaveStudentRecord", data);
+        if (postResult.IsSuccessStatusCode)
+        {
+            record.Score += data.IsCorrect;
+            var recordPostResult = await http.PostAsJsonAsync<ExamRecord>($"api/UpdateExamRecords/", record);
+            if (recordPostResult.IsSuccessStatusCode)
+            {
+                record = await recordPostResult.Content.ReadFromJsonAsync<ExamRecord>();
+            }
+            selectedAnswer = string.Empty;
+
+            GetNextQuestion();
+        }
+    }
+
+}
+
+
+@if (user != null && ExamData != null)
+{
+    <div class="row mb-5">
+        <div class="col-xl-12">
+            <MudExpansionPanels MultiExpansion Elevation="25">
+                <MudExpansionPanel IsExpanded HideIcon="true">
+                    <TitleContent>
+                        <div class="d-flex">
+                            <MudText Class="mt-1">@ExamData.ExamName</MudText>
+                            <MudElement Class="d-flex ml-auto align-middle">
+                                <MudIcon Icon="@Icons.Material.Filled.Timer" Color="Color.Default" />
+                                <MudText Class="ml-2">@countdownTimer</MudText>
+                            </MudElement>
+                        </div>
+                    </TitleContent>
+                    <ChildContent>
+                        <MudToolBar Dense Class="p-0">
+                            <MudText Typo="Typo.body1">@ExamData.ExamQuestions.Count items</MudText>
+                            <MudToolBarSpacer />
+                            @if (record != null)
+                            {
+                                <MudElement Class="d-flex ml-auto align-middle">
+                                    <MudText Class="ml-2">Your score: @record.Score</MudText>
+                                </MudElement>
+                            }
+                        </MudToolBar>
+
+                    </ChildContent>
+                </MudExpansionPanel>
+                @if (record == null)
+                {
+                    <MudExpansionPanel Style="height:70vh" Class="align-middle" HideIcon IsExpanded="true">
+                        <p class="text-center pt-5 pb-5 mt-5 mb-5">
+                            <MudButton Disabled="count <= 5" OnClick="StartNowClick" Size="Size.Large" Color="Color.Secondary" Variant="Variant.Filled" Class="mx-auto">
+                                @(count <= 5 ? $"STARTING IN {count}" : $"START NOW")
+                            </MudButton>
+                        </p>
+
+                    </MudExpansionPanel>
+                }
+            </MudExpansionPanels>
+            @if (record != null && nextQuestion != null)
+            {
+                <MudCard Class="p-2 mt-5" Elevation="25">
+                    <MudCardContent>
+                        @if (!isQuestionLoading)
+                        {
+                            <MudText GutterBottom="true" Typo="Typo.h5">
+                                @nextQuestion.MyQuestion
+                            </MudText>
+                        }
+                        else
+                        {
+                            <MudSkeleton Width="70%" />
+                            <MudSkeleton Width="100%" />
+                        }
+
+                        <MudDivider Class="m-2" DividerType="DividerType.Middle" />
+                        @if (!isQuestionLoading)
+                        {
+                            <MudRadioGroup Required @bind-SelectedOption="selectedAnswer" T="string">
+                                <div class="row">
+                                    <div class="col-xl-6">
+                                        <MudRadio Color="Color.Primary" Option="@nextAnswer[0]" Style="width:100%" T="string">@nextAnswer[0]</MudRadio>
+                                    </div>
+                                    <div class="col-xl-6">
+                                        <MudRadio Color="Color.Primary" Option="@nextAnswer[1]" Style="width:100%" T="string">@nextAnswer[1]</MudRadio>
+                                    </div>
+                                    <div class="col-xl-6">
+                                        <MudRadio Color="Color.Primary" Option="@nextAnswer[2]" Style="width:100%" T="string">@nextAnswer[2]</MudRadio>
+                                    </div>
+                                    <div class="col-xl-6">
+                                        <MudRadio Color="Color.Primary" Option="@nextAnswer[3]" Style="width:100%" T="string">@nextAnswer[3]</MudRadio>
+                                    </div>
+                                </div>
+                            </MudRadioGroup>
+                        }
+                        else
+                        {
+                            <MudRadioGroup @bind-SelectedOption="selectedAnswer" T="string">
+                                <div class="row">
+                                    <div class="col-xl-6">
+                                        <MudSkeleton Height="40px" Width="50%" />
+                                    </div>
+                                    <div class="col-xl-6">
+                                        <MudSkeleton Height="40px" Width="50%" />
+                                    </div>
+                                    <div class="col-xl-6">
+                                        <MudSkeleton Height="40px" Width="50%" />
+                                    </div>
+                                    <div class="col-xl-6">
+                                        <MudSkeleton Height="40px" Width="50%" />
+                                    </div>
+                                </div>
+                            </MudRadioGroup>
+                        }
+
+                    </MudCardContent>
+                    @if (!isQuestionLoading)
+                    {
+                        <MudCardActions>
+                            <MudText Typo="Typo.body1">Your answer: @selectedAnswer</MudText>
+                            <MudToolBarSpacer />
+                            <MudButton Disabled="isQuestionLoading" OnClick="btnNextClick" Color="Color.Primary" Size="Size.Small" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.SkipNext">Next</MudButton>
+                        </MudCardActions>
+                    }
+                    else
+                    {
+                        <MudCardActions>
+                            <MudSkeleton Height="30px" Width="10%" />
+                            <MudToolBarSpacer />
+                            <MudSkeleton Height="30px" Width="10%" />
+                        </MudCardActions>
+                    }
+
+                </MudCard>
+            }
+        </div>
+    </div>
+}
+
+@if (showFinishedImage)
+{
+    <MudPaper Style="height:67vh" Class="align-middle pt-5 mt-5" Elevation="25">
+        <p class="text-center mt-5">
+            <MudText Typo="Typo.h5" GutterBottom="true">Your exam has been successfully finished.</MudText>
+            <img style="width:270px;height:270px;" src="@($"{nav.BaseUri}img/animation_done.gif")" />
+        </p>
+    </MudPaper>
+}
+

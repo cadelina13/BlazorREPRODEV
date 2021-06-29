@@ -1,0 +1,21 @@
+﻿@code { 
+    [Parameter]
+    public UserAccount User { get; set; }
+}
+@if (User != null)
+{
+    
+    <MudCard Elevation="0" Square="true">
+        <MudCardHeader>
+            <CardHeaderAvatar>
+                <MudAvatar Color="Color.Secondary">
+                    <MudIcon Icon="@Icons.Material.Filled.Person" />
+                </MudAvatar>
+            </CardHeaderAvatar>
+            <CardHeaderContent>
+                <MudText Typo="Typo.body2">@User.FirstName @User.LastName</MudText>
+                <MudText Typo="Typo.caption">@User.Email</MudText>
+            </CardHeaderContent>
+        </MudCardHeader>
+    </MudCard>
+}

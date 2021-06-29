@@ -1,0 +1,173 @@
+﻿@page "/subjects"
+@code {
+    List<Subject> listofsubjects;
+    //List<ComponentSubject> listofcomponents;
+    HubConnection hubConnection;
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            hubConnection = new HubConnectionBuilder().WithUrl($"{nav.BaseUri}hubs/applicationHub").WithAutomaticReconnect().Build();
+            if (hubConnection.State != HubConnectionState.Connected) await hubConnection.StartAsync();
+            hubConnection.On<string>("NotifyBoardExamPage", async (id) =>
+            {
+                listofsubjects = await http.GetFromJsonAsync<List<Subject>>("api/GetSubjects");
+                var com = listofsubjects.Select(x => x.ComponentSubjects.Where(x => x.Id == selectedComponent.Id).FirstOrDefault()).FirstOrDefault();
+                selectedComponent = com;
+                StateHasChanged();
+            });
+        }
+        catch (Exception) { }
+
+        //listofsubjects = await Http.CreateClient("api").GetFromJsonAsync<List<Subject>>($"GetSubjects");
+        listofsubjects = await http.GetFromJsonAsync<List<Subject>>("api/GetSubjects");
+    }
+    Func<ComponentSubject, string> converter = p => p?.Name;
+    ComponentSubject selectedComponent = null;
+
+    async void ShowUploadDialog()
+    {
+        if (selectedComponent == null) return;
+
+        var d = dialog.Show<DialogUploadQuestion>($"{selectedComponent.Name}",
+            new DialogParameters() { ["selectedComponent"] = selectedComponent },
+            new DialogOptions() { MaxWidth = MaxWidth.Small }
+            );
+        var rs = await d.Result;
+        if (!rs.Cancelled)
+        {
+            snackbar.Add("Records has been successfully saved.");
+        }
+    }
+
+    async Task OnTabChange(int i)
+    {
+        selectedComponent = null;
+        listofsubjects = await http.GetFromJsonAsync<List<Subject>>("api/GetSubjects");
+        StateHasChanged();
+    }
+
+    async void OpenEditRemoveDialog(Question data)
+    {
+        var d = dialog.Show<DialogEditQuestion>($"{selectedComponent.Name}",
+            new DialogParameters() { ["data"] = data },
+            new DialogOptions() { MaxWidth = MaxWidth.Small});
+        var rs = await d.Result;
+        if (!rs.Cancelled)
+        {
+            data = (Question) rs.Data;
+            if(data.InActive == 1)
+            {
+                snackbar.Add($"Record has been removed.");
+            }
+            else
+            {
+                snackbar.Add("Record has been updated.");
+            }
+            try
+            {
+                await hubConnection.SendAsync("NotifyBoardExamPage", "ee");
+            }
+            catch (Exception) { }
+        }
+    }
+}
+
+
+<MudToolBar>
+    <MudText GutterBottom Typo="Typo.h5" Color="Color.Primary">Board Exam Subjects</MudText>
+    <MudToolBarSpacer/>
+    <MudButton OnClick="@(()=> nav.NavigateTo($"{nav.BaseUri}subjects/exams"))" StartIcon="@Icons.Material.Filled.Book" Color="Color.Primary" Variant="Variant.Filled">Exam</MudButton>
+</MudToolBar>
+
+@if (listofsubjects == null)
+{
+<MudPaper Class="p-3 mb-3" Elevation="25">
+    <MudSkeleton Width="100%" />
+    <MudSkeleton Height="50px" Width="100%" />
+    <MudSkeleton Width="60%" />
+    <MudSkeleton Height="50px" Width="100%" />
+    <MudSkeleton Height="50px" Width="100%" />
+    <MudSkeleton Width="60%" />
+    <MudSkeleton Width="100%" />
+    <MudSkeleton Width="20%" />
+</MudPaper>
+}
+else
+{
+    <MudTabs ActivePanelIndexChanged="OnTabChange" Elevation="25" Rounded="true" >
+        @foreach (var i in listofsubjects)
+        {
+            
+            <MudTabPanel Text="@i.Name" ToolTip="@($"{i.Percentage}%")">
+                <MudPaper Class="pt-2 mt-3" Elevation="25">
+                    <div class="row">
+                        <div class="col-xl-12">
+                            <MudToolBar Dense Class="align-middle mb-3">
+                                <MudIconButton OnClick="ShowUploadDialog" Disabled="@(selectedComponent == null)" Class="mr-1" Icon="@Icons.Material.Outlined.Add" Color="Color.Primary" Variant="Variant.Filled" />
+                                <MudSelect Class="ml-1" @bind-Value="selectedComponent" T="ComponentSubject" Label="Components" Strict="true" Variant="Variant.Outlined" Dense ToStringFunc="@converter">
+                                    @if (i.ComponentSubjects != null)
+                                    {
+                                        @foreach (var component in i.ComponentSubjects)
+                                        {
+                                            <MudSelectItem T="ComponentSubject" Value="@(component)" />
+                                        }
+                                    }
+                                </MudSelect>
+                            </MudToolBar>
+
+                        </div>
+                        <div class="col-xl-12">
+                            @if (selectedComponent != null)
+                            {
+                                if (selectedComponent.Questions != null)
+                                {
+                                    <MudTable Elevation="0" Context="c" Items="@selectedComponent.Questions.Where(x=>x.InActive == 0).OrderByDescending(x=>x.DateCreated)" Hover="true" Breakpoint="Breakpoint.Xs">
+                                        <HeaderContent>
+                                            <MudTh Style="width:1%">*</MudTh>
+                                            <MudTh>Question</MudTh>
+                                            <MudTh>Choice 1</MudTh>
+                                            <MudTh>Choice 2</MudTh>
+                                            <MudTh>Choice 3</MudTh>
+                                            <MudTh>Choice 4</MudTh>
+                                            <MudTh>Correct Answer</MudTh>
+                                        </HeaderContent>
+                                        <RowTemplate>
+                                            <MudTd Style="width:1%" DataLabel="*">
+                                                <MudIconButton OnClick="@(()=> OpenEditRemoveDialog(c))" Size="Size.Small" Icon="@Icons.Material.Outlined.Edit" Variant="Variant.Text" />
+                                            </MudTd>
+                                            <MudTd DataLabel="Question">@c.MyQuestion</MudTd>
+                                            <MudTd DataLabel="Choice1">@c.Choice1</MudTd>
+                                            <MudTd DataLabel="Choice2">@c.Choice2</MudTd>
+                                            <MudTd DataLabel="Choice3">@c.Choice3</MudTd>
+                                            <MudTd DataLabel="Choice4">@c.Choice4</MudTd>
+                                            <MudTd DataLabel="CorrectAnswer">@c.CorrectAnswer</MudTd>
+                                        </RowTemplate>
+                                        <PagerContent>
+                                            <MudTablePager PageSizeOptions="new int[]{5, 10, 50, 100, 500}" />
+                                        </PagerContent>
+                                    </MudTable>
+                                    if (selectedComponent.Questions.Count == 0)
+                                    {
+                                        <p class="p-5 text-center">
+                                            <i>No questions added yet.</i>
+                                        </p>
+                                    }
+                                }
+
+                            }
+                            else
+                            {
+                                <p class="p-5 text-center">
+                                    <i>No selected component.</i>
+                                </p>
+                            }
+                        </div>
+                    </div>
+                </MudPaper>
+                
+            </MudTabPanel>
+        }
+
+    </MudTabs>
+}

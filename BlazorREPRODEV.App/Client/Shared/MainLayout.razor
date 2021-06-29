@@ -1,0 +1,251 @@
+﻿@inherits LayoutComponentBase
+@using BlazorREPRODEV.App.Client.Pages
+<MudThemeProvider />
+<MudLayout>
+    <MudAppBar Elevation="1">
+        <img @onclick="@(()=> nav.NavigateTo(nav.BaseUri))" src="/img/icon_white2.png" style="width:50px;height:50px;cursor:pointer" />
+        <MudText @onclick="@(()=> nav.NavigateTo(nav.BaseUri))" Style="cursor:pointer" Typo="Typo.h5" Class="ml-4 mr-4">REPRODEV</MudText>
+        @if (user != null)
+        {
+            <MudIconButton Color="Color.Inherit" Icon="@(open ? Icons.Material.Outlined.MenuOpen : Icons.Material.Outlined.Menu)" Edge="Edge.Start" OnClick="@ToggleDrawer" />
+        }
+        <MudAppBarSpacer />
+        @if (user != null)
+        {
+            if (user.UserType == "INSTRUCTOR")
+            {
+                <MudBadge Max="100" Style="cursor:pointer" Content="@notif.Count" Color="Color.Secondary" Overlap="true" Class="mx-6 my-4">
+                    <MudIcon @onclick="ToggleNotification" Icon="@Icons.Material.Filled.Notifications" Color="Color.Inherit" />
+                </MudBadge>
+            }
+            <MudButton Color="Color.Inherit" StartIcon="@Icons.Material.Filled.Logout" OnClick="@SignOut">Sign Out</MudButton>
+            <!--<MudMenu Icon="@Icons.Material.Filled.MoreVert" Direction="Direction.Left" OffsetX="true" Color="Color.Inherit">
+        <MudMenuItem>
+            <MudIcon Icon="@Icons.Material.Filled.Person" Class="mr-3" />
+            @user.FirstName @user.LastName
+        </MudMenuItem>
+        <MudMenuItem OnClick="SignOut">
+            <MudIcon Icon="@Icons.Material.Filled.Logout" Class="mr-3" />
+            Sign Out
+        </MudMenuItem>-->
+
+            @*
+            <MudMenuItem OnClick="@(()=> { DarkMode(); })">
+                <MudIcon Icon="@(currentTheme == defaultTheme ? Icons.Material.Filled.Brightness7 : Icons.Material.Filled.Brightness2)" Color="Color.Inherit" Class="mr-3" />
+                @(currentTheme == defaultTheme ? "Dark Mode" : "Light Mode")
+            </MudMenuItem>*@
+            <!--</MudMenu>-->
+        }
+        else
+        {
+            @* <MudMenu Icon="@Icons.Material.Filled.MoreVert" Direction="Direction.Left" OffsetX="true" Color="Color.Inherit">
+                <MudMenuItem OnClick="@(()=> nav.NavigateTo($"{nav.BaseUri}authentication"))">
+                    <MudIcon Icon="@Icons.Material.Filled.Login" Class="mr-3" />
+                    Sign In
+                </MudMenuItem>
+            </MudMenu>*@
+            <MudButton Color="Color.Inherit" StartIcon="@Icons.Material.Filled.Login" OnClick="@(()=> nav.NavigateTo($"{nav.BaseUri}authentication"))">Sign In</MudButton>
+
+        }
+
+    </MudAppBar>
+    <MudDrawer @bind-Open="openNotif" Fixed Height="48%" ClipMode="DrawerClipMode.Always" Variant="DrawerVariant.Temporary" Anchor="MudBlazor.Anchor.End" Elevation="0">
+        @if (listofpending == null)
+        {
+            <MudPaper Elevation="0" Class="mb-3 p-3">
+                <MudSkeleton Width="80%" />
+                <MudSkeleton Width="100%" Class="mb-2" />
+                <MudSkeleton Width="80%" />
+                <MudSkeleton Width="100%" />
+                <MudSkeleton Width="100%" Class="mb-2" />
+                <MudSkeleton Width="80%" />
+                <MudSkeleton Width="100%" />
+                <MudSkeleton Width="100%" Class="mb-2" />
+                <MudSkeleton Width="80%" />
+                <MudSkeleton Width="100%" />
+            </MudPaper>
+        }
+        else
+        {
+            if (listofpending.Count() == 0)
+            {
+                <p class="text-center p-3">
+                    <i>No notification.</i>
+                </p>
+            }
+            else
+            {
+                <MudList Dense>
+                    @foreach (var i in listofpending.OrderByDescending(x => x.Account.DateRegistered))
+                    {
+                        <MudListItem Class="align-middle" Avatar="@Icons.Material.Outlined.AccountCircle" Dense>
+                            <MudText Typo="Typo.body1">@i.Account.FirstName @i.Account.LastName</MudText>
+                            <MudText Typo="Typo.caption">@Helper.toFriendlyDate(i.Account.DateRegistered)</MudText>
+                        </MudListItem>
+                    }
+                    <MudListSubheader Class="text-center p-0 m-0" @onclick="@(()=> {  nav.NavigateTo($"{nav.BaseUri}students"); ToggleNotification(); })" Style="cursor:pointer">
+                        More
+                    </MudListSubheader>
+                </MudList>
+            }
+        }
+
+    </MudDrawer>
+    <MudDrawer @bind-Open="open" ClipMode="DrawerClipMode.Always" Elevation="25">
+        <MudNavMenu>
+            @if (user != null)
+            {
+                <UserCard User="@user" />
+                <MudDivider Class="mb-4" />
+                <MudNavLink Href="/" Icon="@Icons.Material.Outlined.Dashboard" Match="NavLinkMatch.All" IconColor="Color.Inherit">Dashboard</MudNavLink>
+                if (user.UserType == "INSTRUCTOR" || user.UserType == "ADMINISTRATOR")
+                {
+                    <MudNavLink Href="/subjects" Icon="@Icons.Material.Outlined.Subject" Match="NavLinkMatch.All" IconColor="Color.Inherit">Board Exam Subjects</MudNavLink>
+                    <MudNavLink Href="/students" Icon="@Icons.Material.Outlined.PeopleOutline" Match="NavLinkMatch.All" IconColor="Color.Inherit">Students</MudNavLink>
+                    <MudNavLink Href="/records" Icon="@Icons.Material.Outlined.Archive" Match="NavLinkMatch.All" IconColor="Color.Inherit">Records</MudNavLink>
+                }
+                if (user.UserType == "STUDENT")
+                {
+                    <MudNavLink Href="/myexams" Icon="@Icons.Material.Filled.LibraryBooks" Match="NavLinkMatch.All" IconColor="Color.Inherit">My Exams</MudNavLink>
+                }
+
+                if (user.UserType == "ADMINISTRATOR")
+                {
+                    <MudDivider Class="mt-3 mb-3" DividerType="DividerType.Middle" />
+                    <MudNavLink Href="/admin/users" Icon="@Icons.Material.Outlined.AdminPanelSettings" Match="NavLinkMatch.All" IconColor="Color.Inherit">Users</MudNavLink>
+                }
+            }
+
+        </MudNavMenu>
+    </MudDrawer>
+    <MudMainContent>
+        @if (hubConnection != null && hubConnection.State == HubConnectionState.Reconnecting)
+        {
+            <MudPaper Square Elevation="0" Class="text-center p-0 m-0 bg-danger">
+                <MudProgressCircular Class="align-middle m-1" Indeterminate Size="Size.Small" Style="width:16px;height:16px;color:white" />
+                <small style="color:white">Reconnecting</small>
+            </MudPaper>
+        }
+        <MudContainer MaxWidth="MaxWidth.False" Class="mt-4">
+            @Body
+            <MudScrollToTop>
+                <MudFab Size="Size.Small" Color="Color.Primary" Icon="@Icons.Filled.ArrowUpward" />
+            </MudScrollToTop>
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+@code {
+    UserAccount user;
+
+    bool open = false;
+    bool openNotif = false;
+
+    void ToggleDrawer()
+    {
+        open = !open;
+    }
+    async void ToggleNotification()
+    {
+        openNotif = !openNotif;
+        await GetPending();
+    }
+    NotificationModel notif = new NotificationModel();
+    List<RegisteredStudent> listofpending;
+    HubConnection hubConnection;
+    protected override async Task OnInitializedAsync()
+    {
+
+        try
+        {
+            hubConnection = new HubConnectionBuilder().WithUrl($"{nav.BaseUri}hubs/applicationHub").WithAutomaticReconnect().Build();
+            if (hubConnection.State != HubConnectionState.Connected) await hubConnection.StartAsync();
+            hubConnection.Reconnecting += async (e) =>
+            {
+                if (user == null)
+                    open = false;
+                await InvokeAsync(StateHasChanged);
+            };
+        }
+        catch (Exception) { }
+        user = await Core.GetInstance().GetUser(localStorage);
+        if(user == null)
+        {
+            open = false;
+            StateHasChanged();
+        }
+        if (hubConnection.State == HubConnectionState.Disconnected)
+            await hubConnection.StartAsync();
+        if(hubConnection != null && hubConnection.State == HubConnectionState.Connected)
+        {
+            hubConnection.Reconnected += async (e) =>
+            {
+                snackbar.Add("Connected", Severity.Success, (e) =>
+                {
+                    e.BackgroundBlurred = true;
+                    e.ShowCloseIcon = true;
+                    e.SnackbarVariant = Variant.Outlined;
+                });
+                StateHasChanged();
+            };
+
+            hubConnection.On<string>("NotifyRegisteredStudentPage", async (userType) =>
+            {
+                if (user != null)
+                {
+                    if (user.UserType == userType)
+                    {
+                        await LoadNotif();
+                        snackbar.Configuration.SnackbarVariant = Variant.Filled;
+                        snackbar.Configuration.PreventDuplicates = true;
+                        snackbar.Configuration.ShowCloseIcon = true;
+                        snackbar.Configuration.BackgroundBlurred = true;
+                        StateHasChanged();
+                    }
+                }
+            });
+
+            hubConnection.On<string>("NotifyToggleDrawer", (userId) =>
+            {
+                if (user != null)
+                {
+                    if (user.Id.ToString() == userId)
+                    {
+                        open = false;
+                        StateHasChanged();
+                    }
+                }
+            });
+        }
+        if(user != null)
+        {
+            open = true;
+            StateHasChanged();
+        }
+        await LoadNotif();
+    }
+    async Task GetPending()
+    {
+        listofpending = null;
+        listofpending = await http.GetFromJsonAsync<List<RegisteredStudent>>($"api/GetPendingStudent");
+        StateHasChanged();
+    }
+    async Task LoadNotif()
+    {
+        notif = await http.GetFromJsonAsync<NotificationModel>($"api/GetNumberOfPeding");
+    }
+
+    async Task SignOut()
+    {
+        var d = dialog.Show<DialogCustom>("Confirmation",
+            new DialogParameters() { ["Message"] = "You are about to end your session. Are you sure?", ["OK"] = "Sign Out", ["CANCEL"] = "CANCEL" },
+            new DialogOptions() { MaxWidth = MaxWidth.ExtraSmall }
+            );
+        var rs = await d.Result;
+        if (!rs.Cancelled)
+        {
+            await Core.GetInstance().RemoveUser(localStorage);
+            nav.NavigateTo($"{nav.BaseUri}", true);
+        }
+
+    }
+}

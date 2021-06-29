@@ -1,0 +1,172 @@
+﻿@page "/myexams"
+@implements IDisposable
+@code {
+    System.Timers.Timer timer = new System.Timers.Timer();
+    public void Dispose()
+    {
+        timer?.Dispose();
+    }
+    HubConnection hubConnection;
+    UserAccount user;
+    List<ExamRecord> listofrecords;
+    ExamRecord OnProgressRecord;
+    string countdownTimer = "00:00:00";
+    protected override async Task OnInitializedAsync()
+    {
+        hubConnection = new HubConnectionBuilder().WithUrl($"{nav.BaseUri}hubs/applicationHub").WithAutomaticReconnect().Build();
+        if (hubConnection.State != HubConnectionState.Connected) await hubConnection.StartAsync();
+
+        user = await Core.GetInstance().GetUser(localStorage);
+        if (user != null)
+        {
+            await LoadData();
+        }
+    }
+    async Task LoadData()
+    {
+        listofrecords = await http.GetFromJsonAsync<List<ExamRecord>>($"api/GetMyExamRecords/{user.Id.ToString()}");
+        if (listofrecords.Count > 0)
+        {
+            OnProgressTimer();
+        }
+    }
+
+    void ShowDialogAvailableExam()
+    {
+        if (listofrecords == null || OnProgressRecord != null) return;
+        var myexams = new List<Guid>();
+        foreach (var i in listofrecords)
+        {
+            myexams.Add(i.ExamData.Id);
+        }
+        var d = dialog.Show<DialogAvailableExams>("List of available exams",
+            new DialogParameters() { ["myexams"] = myexams },
+            new DialogOptions() { MaxWidth = MaxWidth.Small });
+    }
+
+    void OnProgressTimer()
+    {
+        timer.Interval = 1000;
+        timer.Enabled = true;
+        timer.Elapsed += async (s, e) =>
+        {
+            if (OnProgressRecord != null)
+            {
+                var totalMins = (OnProgressRecord.ExamData.MinutesDuration - (DateTime.Now - OnProgressRecord.DateTaken).TotalMinutes);
+                if (totalMins <= 0)
+                {
+                    timer.Enabled = false;
+                    timer.Dispose();
+                    OnProgressRecord = null;
+                    listofrecords = await http.GetFromJsonAsync<List<ExamRecord>>($"api/GetMyExamRecords/{user.Id.ToString()}");
+                    StateHasChanged();
+                    return;
+                }
+                var t = TimeSpan.FromMinutes(totalMins);
+                countdownTimer = $"{t.Hours.ToString("D2")}:{t.Minutes.ToString("D2")}:{t.Seconds.ToString("D2")}";
+
+                StateHasChanged();
+            }
+
+        };
+    }
+}
+
+
+<MudText GutterBottom Typo="Typo.h5" Color="Color.Primary">My Exams</MudText>
+
+<div class="row">
+    @if (listofrecords == null)
+    {
+        <div class="col-xl-8">
+            <MudPaper Elevation="25" Class="mb-3 p-3">
+                <MudSkeleton Width="40%" />
+                <MudSkeleton Width="80%" />
+                <MudSkeleton Width="100%" />
+                <MudSkeleton Height="80px" Width="100%" />
+                <MudSkeleton Width="100%" />
+                <MudSkeleton Width="20%" />
+            </MudPaper>
+
+        </div>
+        <div class="col-xl-4">
+            <MudPaper Elevation="25" Class="mb-3 p-3">
+                <MudSkeleton Width="80%" />
+                <MudSkeleton Width="100%" Class="mb-2" />
+                <MudSkeleton Width="80%" />
+                <MudSkeleton Width="100%" />
+                <MudSkeleton Width="100%" Class="mb-2" />
+                <MudSkeleton Width="80%" />
+                <MudSkeleton Width="100%" />
+                <MudSkeleton Width="100%" Class="mb-2" />
+                <MudSkeleton Width="80%" />
+                <MudSkeleton Width="100%" />
+            </MudPaper>
+        </div>
+    }
+    else
+    {
+
+        <div class="col-xl-8">
+            <MudTable Class="mb-3" Elevation="25" Context="c" Items="@listofrecords" Hover="true" Breakpoint="Breakpoint.Xs">
+                <ToolBarContent>
+                    <MudText Color="Color.Primary" Typo="Typo.body1">Records</MudText>
+                    <MudToolBarSpacer />
+                    <MudButton Disabled="@(OnProgressRecord != null || (OnProgressRecord != null && !OnProgressRecord.DateFinished.HasValue))" OnClick="ShowDialogAvailableExam" StartIcon="@Icons.Material.Outlined.PendingActions" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Filled"> Take Exam</MudButton>
+                </ToolBarContent>
+                <HeaderContent>
+                    <MudTh>Title</MudTh>
+                    <MudTh>Items</MudTh>
+                    <MudTh>Score</MudTh>
+                    <MudTh>Date Taken</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    @{
+                            var totalMins = (c.ExamData.MinutesDuration - (DateTime.Now - c.DateTaken).TotalMinutes);
+                            if (totalMins > 0 && !c.DateFinished.HasValue)
+                            {
+                                OnProgressRecord = c;
+                            <MudTd DataLabel="Title">
+
+                                <MudIconButton OnClick="@(()=>nav.NavigateTo($"{nav.BaseUri}q/{c.ExamData.Id.ToString()}"))" Class="mr-1" Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" Color="Color.Default" />
+                                <MudBadge Overlap Color="Color.Secondary" Content="@($"In progress")">
+                                    <MudText GutterBottom="false">@c.ExamData.ExamName</MudText>
+                                </MudBadge>
+                            </MudTd>
+                            }
+                            else
+                            {
+                                <MudTd DataLabel="Title">@c.ExamData.ExamName</MudTd>
+                            }
+                    }
+                    <MudTd DataLabel="Items">@c.ExamData.ExamQuestions.Count</MudTd>
+                    <MudTd DataLabel="Score">@c.Score</MudTd>
+                    <MudTd DataLabel="DateTaken">@Helper.toFriendlyDate(c.DateTaken)</MudTd>
+                </RowTemplate>
+                <PagerContent>
+                    @if (listofrecords.Count == 0)
+                        {
+                        <p class="text-center p-4">
+                            <i>No exams taken yet.</i>
+                        </p>
+                        }
+                        else
+                        {
+                        <MudTablePager DisableRowsPerPage PageSizeOptions="new int[]{5, 10, 50, 100, 500}" />
+
+                        }
+                </PagerContent>
+            </MudTable>
+        </div>
+    }
+
+</div>
+
+@if (OnProgressRecord != null && !OnProgressRecord.DateFinished.HasValue)
+{
+    <MudScrollToTop Visible="true">
+        <MudPaper Square="false" Elevation="25" Class="p-2">
+            <MudText Color="Color.Secondary"><MudIcon Color="Color.Secondary" Size="Size.Small" Icon="@Icons.Material.Filled.Timer" Class="mr-2" /> @countdownTimer</MudText>
+        </MudPaper>
+    </MudScrollToTop>
+}

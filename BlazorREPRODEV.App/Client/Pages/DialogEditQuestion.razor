@@ -1,0 +1,77 @@
+﻿
+@code {
+    [CascadingParameter] MudDialogInstance _mudDialog { get; set; }
+    [Parameter]
+    public Question data { get; set; }
+    bool IsSaving = false;
+    async void SaveData()
+    {
+        IsSaving = true;
+        StateHasChanged();
+        var rs = await http.PostAsJsonAsync<Question>($"api/UpdateQuestion", data);
+        var d = await rs.Content.ReadFromJsonAsync<Question>();
+        data = d;
+        _mudDialog.Close(DialogResult.Ok(d));
+        IsSaving = false;
+        StateHasChanged();
+    }
+    async void DeleteData()
+    {
+        IsSaving = true;
+        StateHasChanged();
+        data.InActive = 1;
+        var rs = await http.PostAsJsonAsync<Question>($"api/UpdateQuestion", data);
+        var d = await rs.Content.ReadFromJsonAsync<Question>();
+        data = d;
+        _mudDialog.Close(DialogResult.Ok(d));
+        IsSaving = false;
+        StateHasChanged();
+    }
+}
+
+
+<MudDialog>
+    <DialogContent>
+        <div class="row">
+            
+            <div class="col-md-12">
+                <MudTextField Disabled="IsSaving" Lines="5" @bind-Value="@data.MyQuestion" Immediate Variant="Variant.Outlined" Label="Question" Required />
+            </div>
+            <div class="col-md-12">
+                <hr />
+            </div>
+            <div class="col-md-6">
+                <MudTextField Disabled="IsSaving" Immediate @bind-Value="@data.Choice1" Variant="Variant.Outlined" Label="Choice 1" AdornmentIcon="@Icons.Material.Filled.ArrowRight" Adornment="Adornment.Start" AdornmentColor="Color.Default" Required />
+            </div>
+            <div class="col-md-6">
+                <MudTextField Disabled="IsSaving" Immediate @bind-Value="@data.Choice2" Variant="Variant.Outlined" Label="Choice 2" AdornmentIcon="@Icons.Material.Filled.ArrowRight" Adornment="Adornment.Start" AdornmentColor="Color.Default" Required />
+            </div>
+            <div class="col-md-6">
+                <MudTextField Disabled="IsSaving" Immediate @bind-Value="@data.Choice3" Variant="Variant.Outlined" Label="Choice 3" AdornmentIcon="@Icons.Material.Filled.ArrowRight" Adornment="Adornment.Start" AdornmentColor="Color.Default" Required />
+            </div>
+            <div class="col-md-6">
+                <MudTextField Disabled="IsSaving" Immediate @bind-Value="@data.Choice4" Variant="Variant.Outlined" Label="Choice 4" AdornmentIcon="@Icons.Material.Filled.ArrowRight" Adornment="Adornment.Start" AdornmentColor="Color.Default" Required />
+            </div>
+            <div class="col-md-12">
+                <MudSelect Disabled="@(IsSaving || string.IsNullOrEmpty(data.Choice1) || string.IsNullOrEmpty(data.Choice2) || string.IsNullOrEmpty(data.Choice3) || string.IsNullOrEmpty(data.Choice4))" Immediate T="string" @bind-Value="@data.CorrectAnswer" Label="Correct Answer" Strict="true" Variant="Variant.Outlined">
+                    <MudSelectItem T="string" @bind-Value="@data.Choice1" />
+                    <MudSelectItem T="string" @bind-Value="@data.Choice2" />
+                    <MudSelectItem T="string" @bind-Value="@data.Choice3" />
+                    <MudSelectItem T="string" @bind-Value="@data.Choice4" />
+                </MudSelect>
+            </div>
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="DeleteData" Disabled="IsSaving" Size="Size.Small" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Delete" Variant="Variant.Text">Remove</MudButton>
+        <MudToolBarSpacer />
+        <MudButton OnClick="SaveData" Disabled="@(string.IsNullOrEmpty(data.MyQuestion)
+                                       || string.IsNullOrEmpty(data.Choice1)
+                                       || string.IsNullOrEmpty(data.Choice2)
+                                       || string.IsNullOrEmpty(data.Choice3)
+                                       || string.IsNullOrEmpty(data.Choice4)
+                                       || string.IsNullOrEmpty(data.CorrectAnswer)
+                                       || data.MyQuestion.Length < 3
+                                       || IsSaving )" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" Variant="Variant.Filled">Save  </MudButton>
+    </DialogActions>
+</MudDialog>

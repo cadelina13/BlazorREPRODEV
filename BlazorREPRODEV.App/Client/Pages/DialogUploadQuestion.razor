@@ -1,0 +1,110 @@
+﻿@inject IFileReaderService FileReaderService
+@code {
+
+    [CascadingParameter] MudDialogInstance _mudDialog { get; set; }
+    [Parameter]
+    public ComponentSubject selectedComponent { get; set; }
+
+    HubConnection hubConnection;
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            hubConnection = new HubConnectionBuilder().WithUrl($"{nav.BaseUri}hubs/applicationHub").WithAutomaticReconnect().Build();
+            if (hubConnection.State != HubConnectionState.Connected) await hubConnection.StartAsync();
+            if (hubConnection.State == HubConnectionState.Disconnected)
+                await hubConnection.StartAsync();
+        }catch(Exception e) { }
+    }
+
+    UploadResult uploadResult = null;
+    bool IsSaving = false;
+    async void Submit()
+    {
+        IsSaving = true;
+        StateHasChanged();
+        var rs = await http.GetFromJsonAsync<List<Subject>>($"api/SaveExcel/{uploadResult.FileName}/{selectedComponent.Id.ToString()}");
+        IsSaving = false;
+        await hubConnection.SendAsync("NotifyBoardExamPage", "ee");
+        _mudDialog.Close(DialogResult.Ok(rs));
+    }
+    void Cancel() => _mudDialog.Close(DialogResult.Cancel());
+    private ElementReference _input;
+    bool IsUploading = false;
+    string _filename = string.Empty;
+    string _filesize = string.Empty;
+    string _dateModefied = string.Empty;
+    async void HandleSelected()
+    {
+        uploadResult = null;
+        await InvokeAsync(StateHasChanged);
+        var f = await FileReaderService.CreateReference(_input).EnumerateFilesAsync();
+        var file = f.FirstOrDefault();
+        if (file != null)
+        {
+            IsUploading = true;
+            await InvokeAsync(StateHasChanged);
+            var fileInfo = await file.ReadFileInfoAsync();
+            _filename = fileInfo.Name;
+            _filesize = Helper.SizeSuffix(fileInfo.Size);
+            _dateModefied = fileInfo.LastModifiedDate.HasValue ? fileInfo.LastModifiedDate.Value.ToString() : string.Empty;
+            using (var ms = await file.CreateMemoryStreamAsync(4 * 1024))
+            {
+                var content = new MultipartFormDataContent();
+                content.Headers.ContentDisposition = new ContentDispositionHeaderValue("form-data");
+                content.Add(new StreamContent(ms, Convert.ToInt32(ms.Length)), selectedComponent.Id.ToString(), fileInfo.Name);
+                var result = await http.PostAsync($"api/UploadExcel", content);
+                uploadResult = await result.Content.ReadFromJsonAsync<UploadResult>();
+                IsUploading = false;
+                await InvokeAsync(StateHasChanged);
+            }
+
+        }
+    }
+}
+
+<MudDialog>
+    <DialogContent>
+        <div class="row">
+            @if (IsUploading)
+            {
+                <div class="col-xl-12">
+                    <p class="mt-3 mb-3">
+                        <MudProgressLinear Static Size="Size.Small" Color="Color.Primary" Indeterminate="true" Class="my-7" />
+                    </p>
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(_filename))
+            {
+                <div class="col-xl-12">
+                    <dl class="m-3">
+                        <dt>File details:</dt>
+                        <dd>
+                            <ul>
+                                <li>File name: @_filename</li>
+                                <li>File size: @_filesize</li>
+                                <li>Date modified: @_dateModefied</li>
+                                <li>No. of rows: @(uploadResult != null ? uploadResult.RowCount : 0)</li>
+                            </ul>
+                        </dd>
+                    </dl>
+                </div>
+            }
+            else
+            {
+                <div class="col-xl-12">
+                    <input disabled="@(IsUploading || IsSaving)" type="file" @ref="_input" @onchange="HandleSelected" accept=".xls, .xlsx" />
+                </div>
+                <div class="col-xl-12">
+                    <p class="p-5 text-center">
+                        <i>No selected file.</i>
+                    </p>
+                </div>
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Disabled="@(IsUploading || IsSaving)" Size="Size.Small" OnClick="Cancel" Color="Color.Default" StartIcon="@Icons.Material.Filled.Cancel" Variant="Variant.Filled">Cancel  </MudButton>
+        <MudButton Disabled="@(IsUploading || IsSaving)" Size="Size.Small" OnClick="Submit" Color="Color.Primary" StartIcon="@Icons.Material.Filled.UploadFile" Variant="Variant.Filled">Upload  </MudButton>
+    </DialogActions>
+</MudDialog>

@@ -1,0 +1,25 @@
+﻿@code {
+    [CascadingParameter] MudDialogInstance _mudDialog { get; set; }
+    [Parameter]
+    public string Message { get; set; }
+    [Parameter]
+    public string OK { get; set; }
+    [Parameter]
+    public string CANCEL { get; set; }
+
+    void Submit()
+    {
+        _mudDialog.Close(DialogResult.Ok(true));
+    }
+    void Cancel() => _mudDialog.Close(DialogResult.Cancel());
+}
+
+<MudDialog>
+    <DialogContent>
+        @Message
+    </DialogContent>
+    <DialogActions>
+        <MudButton Size="Size.Small" OnClick="Cancel" Color="Color.Default" StartIcon="@Icons.Material.Filled.Cancel" Variant="Variant.Text">@CANCEL  </MudButton>
+        <MudButton Size="Size.Small" OnClick="Submit" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Check" Variant="Variant.Text">@OK  </MudButton>
+    </DialogActions>
+</MudDialog>

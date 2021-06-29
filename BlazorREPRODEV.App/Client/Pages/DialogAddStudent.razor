@@ -1,0 +1,91 @@
+﻿@code {
+    [CascadingParameter] MudDialogInstance _mudDialog { get; set; }
+    public RegisteredStudent data = new RegisteredStudent();
+    protected override async Task OnInitializedAsync()
+    {
+        data = new RegisteredStudent();
+        data.IsAccepted = 0;
+        data.Account = new UserAccount();
+        await InvokeAsync(StateHasChanged);
+    }
+    bool IsSaving = false;
+    async Task Submit()
+    {
+        IsSaving = true;
+        StateHasChanged();
+        var d = await http.PostAsJsonAsync<RegisteredStudent>($"api/AddStudent", data);
+        if (d.IsSuccessStatusCode)
+        {
+            var rs = int.Parse(await d.Content.ReadAsStringAsync());
+            if(rs == 100)
+            {
+                IsSaving = false;
+                StateHasChanged();
+                snackbar.Add("Username is already exist.");
+                return;
+            }
+            if(rs == 200)
+            {
+                IsSaving = false;
+                StateHasChanged();
+                snackbar.Add("Email is already exist.");
+                return;
+            }
+            await Task.Delay(1000);
+            _mudDialog.Close(DialogResult.Ok(true));
+            IsSaving = false;
+            StateHasChanged();
+        }
+
+    }
+    void Cancel() => _mudDialog.Close(DialogResult.Cancel());
+    void ShowPassword()
+    {
+        input = input == InputType.Password ? InputType.Text : InputType.Password;
+    }
+    InputType input = InputType.Password;
+}
+
+<MudDialog>
+    <DialogContent>
+        <MudPaper Class="p-2 mb-2" Elevation="0" Outlined>
+            <MudText Typo="Typo.body1">Account Information</MudText>
+            <div class="row">
+                <div class="col-xl-6">
+                    <MudTextField Label="Username" @bind-Value="@data.Account.Username" Disabled="IsSaving" Immediate Variant="Variant.Outlined" Required />
+                </div>
+                <div class="col-xl-6">
+                    <MudTextField OnAdornmentClick="ShowPassword" AdornmentIcon="@(input == InputType.Password ? Icons.Material.Outlined.Visibility : Icons.Material.Outlined.VisibilityOff)" IconSize="Size.Small" Adornment="Adornment.End" InputType="input" Label="Password" @bind-Value="@data.Account.Password" Disabled="IsSaving" Immediate Variant="Variant.Outlined" Required />
+                </div>
+            </div>
+        </MudPaper>
+        <MudPaper Class="p-2" Elevation="0" Outlined>
+            <MudText Typo="Typo.body1">Personal Information</MudText>
+            <div class="row">
+                <div class="col-xl-6">
+                    <MudTextField Label="First Name" @bind-Value="@data.Account.FirstName" Disabled="IsSaving" Immediate Variant="Variant.Outlined" Required />
+                </div>
+                <div class="col-xl-6">
+                    <MudTextField Label="Last Name" @bind-Value="@data.Account.LastName" Disabled="IsSaving" Immediate Variant="Variant.Outlined" Required />
+                </div>
+                <div class="col-xl-12">
+                    <MudTextField Label="Address" @bind-Value="@data.Account.Address" Disabled="IsSaving" Immediate Variant="Variant.Outlined" Required />
+                </div>
+                <div class="col-xl-6">
+                    <MudTextField Label="Contact Number" @bind-Value="@data.Account.ContactNumber" Disabled="IsSaving" Immediate InputType="InputType.Telephone" Variant="Variant.Outlined" Required />
+                </div>
+                <div class="col-xl-6">
+                    <MudTextField Label="Email" @bind-Value="@data.Account.Email" Disabled="IsSaving" Immediate InputType="InputType.Email" Variant="Variant.Outlined" Required />
+                </div>
+            </div>
+        </MudPaper>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Disabled="IsSaving" Size="Size.Small" OnClick="Cancel" Color="Color.Default" StartIcon="@Icons.Material.Filled.Cancel" Variant="Variant.Filled">
+            Cancel
+        </MudButton>
+        <MudButton Disabled="IsSaving" Size="Size.Small" OnClick="Submit" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" Variant="Variant.Filled">
+            Register
+        </MudButton>
+    </DialogActions>
+</MudDialog>

@@ -1,0 +1,18 @@
+﻿@code {
+    [CascadingParameter] MudDialogInstance _mudDialog { get; set; }
+    void Submit()
+    {
+        _mudDialog.Close(DialogResult.Ok(true));
+    }
+    void Cancel() => _mudDialog.Close(DialogResult.Cancel());
+}
+
+<MudDialog>
+    <DialogContent>
+        You are about to remove this item. Are you sure?
+    </DialogContent>
+    <DialogActions>
+        <MudButton Size="Size.Small" OnClick="Cancel" Color="Color.Default" StartIcon="@Icons.Material.Filled.Cancel" Variant="Variant.Text">Cancel  </MudButton>
+        <MudButton Size="Size.Small" OnClick="Submit" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Delete" Variant="Variant.Text">Delete  </MudButton>
+    </DialogActions>
+</MudDialog>

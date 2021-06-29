@@ -1,0 +1,282 @@
+﻿@page "/records"
+@implements IDisposable
+
+@code {
+    System.Timers.Timer timer = new System.Timers.Timer(100);
+
+    public void Dispose() => timer?.Dispose();
+
+
+    UserAccount user = new UserAccount();
+    List<ExamRecord> listofexamrecord;
+    List<Exam> listofexams;
+    Exam SelectedExam;
+    Func<Exam, string> converter = p => p?.ExamName;
+    HubConnection hubConnection;
+    protected override async Task OnInitializedAsync()
+    {
+        user = await Core.GetInstance().GetUser(localStorage);
+        hubConnection = new HubConnectionBuilder().WithUrl($"{nav.BaseUri}hubs/applicationHub").WithAutomaticReconnect().Build();
+        if (hubConnection.State != HubConnectionState.Connected) await hubConnection.StartAsync();
+        hubConnection.On<string>("NotifyRegisteredStudentPage", async (userType) =>
+        {
+            if (user != null)
+            {
+                if (user.UserType == userType)
+                {
+                    loadExams();
+
+                    await table.ReloadServerData();
+                    StateHasChanged();
+                }
+            }
+        });
+        timer.Elapsed += async (s, e) =>
+        {
+            listofexamrecord = null;
+            StateHasChanged();
+            listofexamrecord = await http.GetFromJsonAsync<List<ExamRecord>>($"api/GetMyExamRecords/{selectedRow.Account.Id.ToString()}");
+            await InvokeAsync(StateHasChanged);
+            timer.Stop();
+        };
+        timer.Stop();
+        loadExams();
+    }
+
+    async void loadExams()
+    {
+        listofexams = null;
+        listofexams = await http.GetFromJsonAsync<List<Exam>>($"api/AvailableExams");
+    }
+
+    private IEnumerable<RegisteredStudent> pagedData;
+    private MudTable<RegisteredStudent> table;
+    RegisteredStudent selectedRow;
+
+    private int totalItems;
+    private string searchString = null;
+
+    private async Task<TableData<RegisteredStudent>> ServerReload(TableState state)
+    {
+        IEnumerable<RegisteredStudent> data = await http.GetFromJsonAsync<IEnumerable<RegisteredStudent>>("api/GetRegisteredStudent");
+        if (SelectedExam != null)
+        {
+            data = await http.GetFromJsonAsync<IEnumerable<RegisteredStudent>>($"api/GetRegisteredStudent/{SelectedExam.Id.ToString()}");
+        }
+        data = data.Where(element =>
+        {
+            if (string.IsNullOrWhiteSpace(searchString))
+                return true;
+            if (element.Account.FirstName.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (element.Account.LastName.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+                return true;
+            if ($"{element.Account.Address} {element.Account.Email} {element.Account.ContactNumber}".Contains(searchString))
+                return true;
+            return false;
+        }).ToArray();
+        totalItems = data.Count();
+        switch (state.SortLabel)
+        {
+            case "Fullname":
+                data = data.OrderByDirection(state.SortDirection, o => o.Account.LastName);
+                break;
+            case "Email":
+                data = data.OrderByDirection(state.SortDirection, o => o.Account.Email);
+                break;
+            case "Address":
+                data = data.OrderByDirection(state.SortDirection, o => o.Account.Address);
+                break;
+            case "ContactNumber":
+                data = data.OrderByDirection(state.SortDirection, o => o.Account.ContactNumber);
+                break;
+        }
+
+        pagedData = data.Skip(state.Page * state.PageSize).Take(state.PageSize).ToArray();
+        return new TableData<RegisteredStudent>() { TotalItems = totalItems, Items = pagedData };
+    }
+
+    private void OnSearch(string text)
+    {
+        searchString = text;
+        table.ReloadServerData();
+    }
+
+    bool IsStudentPage = false;
+    string col_xl12 = "col-xl-12";
+    async void SelectedChipChanged(MudChip c)
+    {
+        if (c != null && c.Text.ToLower().Contains("students"))
+        {
+            IsStudentPage = true;
+            col_xl12 = "col-xl-9";
+            SelectedExam = null;
+        }
+        else
+        {
+            IsStudentPage = false;
+            col_xl12 = "col-xl-12";
+        }
+        await table.ReloadServerData();
+        await InvokeAsync(StateHasChanged);
+    }
+}
+
+<div class="row">
+    <div class="col-xl-12">
+        <Animate Animation="Animations.ZoomIn">
+            <MudToolBar Class="align-middle" Dense>
+                <MudText Class="mr-2" GutterBottom Typo="Typo.caption">View by:</MudText>
+                <MudChipSet SelectedChipChanged="SelectedChipChanged" Filter Mandatory MultiSelection="false">
+                    <MudChip Text="Students" Label="true" Icon="@Icons.Material.Filled.Person" Default Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled">
+                        Students
+                    </MudChip>
+                    <MudChip Text="Exams" Label="true" Icon="@Icons.Material.Filled.LibraryBooks" Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled">
+                        Exams
+                    </MudChip>
+                </MudChipSet>
+            </MudToolBar>
+        </Animate>
+        
+        <MudDivider Class="m-2" DividerType="DividerType.FullWidth" />
+    </div>
+</div>
+
+<div class="row">
+    @if (IsStudentPage)
+    {
+        <div class="col-xl-3">
+            <MudPaper Elevation="25" Class="mb-3 p-2" Style="max-height:83vh">
+                <MudText>Details</MudText>
+                <MudDivider DividerType="DividerType.Middle" Class="m-1" />
+                @if (selectedRow != null)
+                {
+                    timer.Start();
+                    <MudCard Elevation="0" Square="true">
+                        <MudCardHeader>
+                            <CardHeaderAvatar>
+                                <MudAvatar Color="Color.Default">
+                                    <MudIcon Icon="@Icons.Material.Filled.AccountCircle" />
+                                </MudAvatar>
+                            </CardHeaderAvatar>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.body2">@selectedRow.Account.FirstName @selectedRow.Account.LastName</MudText>
+                                <MudText Typo="Typo.caption">@selectedRow.Account.Email</MudText>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudList Dense DisableGutters DisablePadding>
+                                @if (listofexamrecord != null)
+                                {
+                                    foreach (var i in listofexamrecord)
+                                    {
+                                        <MudListItem DisableGutters Dense>
+                                            <MudText Typo="Typo.body1">@i.ExamData.ExamName</MudText>
+                                            <p class="p-0 m-0">
+                                                <MudText Class="float-right" Typo="Typo.caption">@Helper.toFriendlyDate(i.DateTaken)</MudText>
+                                                <MudText Typo="Typo.caption">Score: @i.Score/@i.ExamData.ExamQuestions.Count</MudText>
+                                            </p>
+                                        </MudListItem>
+                                        <MudDivider DividerType="DividerType.FullWidth" />
+                                    }
+                                    @if (listofexamrecord.Count == 0)
+                                    {
+                                        <MudListItem>
+                                            <p class="text-center p-3">
+                                                <i>No exams taken yet.</i>
+                                            </p>
+                                        </MudListItem>
+                                    }
+                                }
+                                @if (listofexamrecord == null)
+                                {
+                                    <MudListItem DisableGutters Dense>
+                                        <MudSkeleton Width="70%" />
+                                        <MudSkeleton Width="20%" />
+                                    </MudListItem>
+                                    <MudDivider DividerType="DividerType.FullWidth" />
+                                    <MudListItem DisableGutters Dense>
+                                        <MudSkeleton Width="70%" />
+                                        <MudSkeleton Width="20%" />
+                                    </MudListItem>
+                                    <MudDivider DividerType="DividerType.FullWidth" />
+                                    <MudListItem DisableGutters Dense>
+                                        <MudSkeleton Width="70%" />
+                                        <MudSkeleton Width="20%" />
+                                    </MudListItem>
+                                    <MudDivider DividerType="DividerType.FullWidth" />
+                                    <MudListItem DisableGutters Dense>
+                                        <MudSkeleton Width="70%" />
+                                        <MudSkeleton Width="20%" />
+                                    </MudListItem>
+                                    <MudDivider DividerType="DividerType.FullWidth" />
+                                }
+
+                            </MudList>
+
+                        </MudCardContent>
+                    </MudCard>
+                }
+                else
+                {
+                    <p class="text-center p-3">
+                        <i>No selected student.</i>
+                    </p>
+                }
+            </MudPaper>
+        </div>
+    }
+
+    @if (!IsStudentPage)
+    {
+        <div class="col-xl-12">
+            <MudPaper Elevation="25" Class="mb-3 p-2">
+                @if (listofexams == null)
+                {
+                    <MudSkeleton Height="30px" Width="50%" />
+                }
+                <MudSelect @bind-Value="SelectedExam" T="Exam" Label="Selected Exam" Strict="true" Variant="Variant.Outlined" ToStringFunc="@converter">
+                    @if (listofexams != null)
+                    {
+                        table.ReloadServerData();
+                        foreach (var exam in listofexams)
+                        {
+                            <MudSelectItem T="Exam" Value="@(exam)" />
+                        }
+                    }
+                </MudSelect>
+            </MudPaper>
+            
+
+        </div>
+    }
+    <div class="@col_xl12">
+        <MudTable @bind-SelectedItem="selectedRow"
+                  FixedFooter
+                  FixedHeader Elevation="25"
+                  ServerData="@(new Func<TableState, Task<TableData<RegisteredStudent>>>(ServerReload))"
+                  Dense="true" Hover="true" @ref="table">
+            <ToolBarContent>
+                <MudText GutterBottom Typo="Typo.body1" Color="Color.Primary">List of students</MudText>
+                <MudToolBarSpacer />
+                <MudTextField T="string" ValueChanged="@(s=>OnSearch(s))" Placeholder="Search" Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+            </ToolBarContent>
+            <HeaderContent>
+                <MudTh><MudTableSortLabel SortLabel="Fullname" T="RegisteredStudent">Fullname</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortLabel="Email" T="RegisteredStudent">Email</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortLabel="Address" T="RegisteredStudent">Address</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortLabel="ContactNumber" T="RegisteredStudent">Contact</MudTableSortLabel></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd Style="cursor:pointer" DataLabel="Fullname">@($"{context.Account.LastName}, {context.Account.FirstName}")</MudTd>
+                <MudTd Style="cursor:pointer" DataLabel="Email">@context.Account.Email</MudTd>
+                <MudTd Style="cursor:pointer" DataLabel="Address">@context.Account.Address</MudTd>
+                <MudTd Style="cursor:pointer" DataLabel="ContactNumber">@context.Account.ContactNumber</MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager />
+            </PagerContent>
+        </MudTable>
+    </div>
+</div>

@@ -1,0 +1,26 @@
+﻿@using System.Net.Http
+@using System.Net.Http.Json
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.AspNetCore.Components.Web.Virtualization
+@using Microsoft.AspNetCore.Components.WebAssembly.Http
+@using Microsoft.JSInterop
+@using BlazorREPRODEV.App.Client
+@using BlazorREPRODEV.App.Client.Shared
+@using BlazorREPRODEV.App.Shared.ViewModels
+@using BlazorREPRODEV.App.Shared.Models
+@using MudBlazor
+@using System.Linq
+@using Spire.Xls
+@using System.Net.Http.Headers
+@using Tewr.Blazor.FileReader
+@using Microsoft.AspNetCore.SignalR.Client
+@using BlazorAnimate
+
+@inject Blazored.LocalStorage.ILocalStorageService localStorage
+@inject NavigationManager nav
+@inject ISnackbar snackbar
+@inject IDialogService dialog
+@*@inject IHttpClientFactory Http*@
+@inject HttpClient http

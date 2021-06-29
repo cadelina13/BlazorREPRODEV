@@ -1,0 +1,151 @@
+﻿@page "/register"
+@code {
+    RegisteredStudent data = new RegisteredStudent();
+    protected override async Task OnInitializedAsync()
+    {
+        data = new RegisteredStudent();
+        data.IsAccepted = 0;
+        data.Account = new UserAccount();
+        await InvokeAsync(StateHasChanged);
+    }
+    void ShowPassword()
+    {
+        input = input == InputType.Password ? InputType.Text : InputType.Password;
+    }
+    InputType input = InputType.Password;
+
+    bool IsSaving = false;
+
+    private async Task RegisterClick()
+    {
+        if(data.Account.Password.Length < 6)
+        {
+            loginStatus = "Password must be more than 5 characters.";
+            return;
+        }
+        IsSaving = true;
+        StateHasChanged();
+        var rs = await http.PostAsJsonAsync<RegisteredStudent>($"{nav.BaseUri}api/AddStudent", data);
+        if (rs.IsSuccessStatusCode)
+        {
+            var result = int.Parse(await rs.Content.ReadAsStringAsync());
+            if (result == 100)
+            {
+                IsSaving = false;
+                StateHasChanged();
+                loginStatus = "Username is already exist.";
+                return;
+            }
+            if (result == 200)
+            {
+                IsSaving = false;
+                StateHasChanged();
+                loginStatus = "Email is already exist.";
+                return;
+            }
+           @* var hubConnection = new HubConnectionBuilder().WithUrl($"{nav.BaseUri}hubs/applicationHub").WithAutomaticReconnect().Build();
+            await hubConnection.SendAsync("NotifyRegisteredStudentPage", "INSTRUCTOR");*@
+            snackbar.Add("You have been successfully registered.");
+            await Task.Delay(1300);
+            nav.NavigateTo(nav.BaseUri, true);
+            return;
+        }
+        IsSaving = false;
+        loginStatus = "You cannot register right now. Please try again later.";
+        StateHasChanged();
+    }
+
+    public async Task ExecuteSignIn()
+    {
+        snackbar.Add("Signing in...");
+        var user = new UserAccount();
+        user.Username = data.Account.Username;
+        user.Password = data.Account.Password;
+        var rs = await http.PostAsJsonAsync<UserAccount>($"{nav.BaseUri}api/Account/SignIn", user);
+        if (rs.IsSuccessStatusCode)
+        {
+            var result = await rs.Content.ReadFromJsonAsync<UserAccount>();
+            if (result != null && !string.IsNullOrEmpty(result.Id.ToString()))
+            {
+                await Core.GetInstance().SetUser(localStorage, result);
+                await Task.Delay(1000);
+                snackbar.Configuration.SnackbarVariant = Variant.Outlined;
+                snackbar.Add($"Welcome {result.FirstName}!", Severity.Success);
+                nav.NavigateTo($"{nav.BaseUri}", true);
+                return;
+            }
+        }
+    }
+
+    public string loginStatus { get; set; }
+
+    public async Task OnKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Code == "Enter")
+        {
+            await RegisterClick();
+        }
+    }
+}
+
+<div class="row mt-5">
+    <div class="col-xl-6 mx-auto">
+        <MudPaper Elevation="2" Class="p-3 m-3">
+            <MudToolBar Class="align-middle" Dense>
+                <MudText Color="Color.Primary" GutterBottom Align="Align.Center" Typo="Typo.h5">
+                    Register
+                </MudText>
+                <MudToolBarSpacer />
+                <MudIcon Icon="@Icons.Material.Filled.Lock" Color="Color.Primary" />
+            </MudToolBar>
+            <MudDivider Class="m-2" />
+            <MudPaper Class="p-2 mb-2" Elevation="0" Outlined>
+                <MudText Typo="Typo.body1">Account Information</MudText>
+                <div class="row">
+                    <div class="col-xl-6">
+                        <MudTextField Class="mb-3" Label="Username" @bind-Value="@data.Account.Username" OnKeyPress="@(()=> { loginStatus = string.Empty; })"Disabled="IsSaving" Immediate Variant="Variant.Outlined" Required />
+                    </div>
+                    <div class="col-xl-6">
+                        <MudTextField Class="mb-3" OnAdornmentClick="ShowPassword" OnKeyPress="@(()=> { loginStatus = string.Empty; })"AdornmentIcon="@(input == InputType.Password ? Icons.Material.Outlined.Visibility : Icons.Material.Outlined.VisibilityOff)" IconSize="Size.Small" Adornment="Adornment.End" InputType="input" Label="Password" @bind-Value="@data.Account.Password" Disabled="IsSaving" Immediate Variant="Variant.Outlined" Required />
+                    </div>
+                </div>
+            </MudPaper>
+            <MudPaper Class="p-2 mb-2" Elevation="0" Outlined>
+                <MudText Typo="Typo.body1">Personal Information</MudText>
+                <div class="row">
+                    <div class="col-xl-6">
+                        <MudTextField Class="mb-3" Label="First Name" OnKeyPress="@(()=> { loginStatus = string.Empty; })"@bind-Value="@data.Account.FirstName" Disabled="IsSaving" Immediate Variant="Variant.Outlined" Required />
+                    </div>
+                    <div class="col-xl-6">
+                        <MudTextField Class="mb-3" Label="Last Name" OnKeyPress="@(()=> { loginStatus = string.Empty; })"@bind-Value="@data.Account.LastName" Disabled="IsSaving" Immediate Variant="Variant.Outlined" Required />
+                    </div>
+                    <div class="col-xl-12">
+                        <MudTextField Class="mb-3" Label="Address" OnKeyPress="@(()=> { loginStatus = string.Empty; })"@bind-Value="@data.Account.Address" Disabled="IsSaving" Immediate Variant="Variant.Outlined" Required />
+                    </div>
+                    <div class="col-xl-6">
+                        <MudTextField Class="mb-3" Label="Contact Number" OnKeyPress="@(()=> { loginStatus = string.Empty; })"@bind-Value="@data.Account.ContactNumber" Disabled="IsSaving" Immediate InputType="InputType.Telephone" Variant="Variant.Outlined" Required />
+                    </div>
+                    <div class="col-xl-6">
+                        <MudTextField Class="mb-3" Label="Email" OnKeyPress="@(()=> { loginStatus = string.Empty; })"@bind-Value="@data.Account.Email" Disabled="IsSaving" Immediate InputType="InputType.Email" Variant="Variant.Outlined" Required />
+                    </div>
+                </div>
+            </MudPaper>
+            @if (!string.IsNullOrEmpty(loginStatus))
+            {
+                <MudText GutterBottom Color="Color.Secondary" Typo="Typo.caption">@loginStatus</MudText>
+            }
+            <MudToolBar Dense>
+                <MudToolBarSpacer />
+                <MudButton OnClick="RegisterClick" Disabled="IsSaving" StartIcon="@Icons.Material.Filled.Save" Variant="Variant.Filled" Color="Color.Primary">
+                    @(IsSaving ? "Creating..." : "Register")
+                </MudButton>
+            </MudToolBar>
+            @if (IsSaving)
+            {
+                <p class="mt-3 mb-0 p-0">
+                    <MudProgressLinear Color="Color.Primary" Indeterminate Size="Size.Large" />
+                </p>
+            }
+        </MudPaper>
+    </div>
+</div>

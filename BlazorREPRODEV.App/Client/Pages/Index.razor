@@ -1,0 +1,192 @@
+﻿@page "/"
+@code {
+    UserAccount user = new UserAccount();
+    List<ExamRecord> listoftopstudents;
+    List<string> chartLabels = new List<string>();
+    List<double> chartData = new List<double>();
+    List<AdminAnnouncement> listofannouncements = new List<AdminAnnouncement>();
+    UserChat _newChat = new UserChat();
+    List<UserChat> listofchats = new List<UserChat>();
+    List<UserAccount> listofusers = new List<UserAccount>();
+    HubConnection hubConnection;
+    protected override async Task OnInitializedAsync()
+    {
+        hubConnection = await Core.GetInstance().GetHub(nav.BaseUri);
+        hubConnection.On<string>("NotifyChat", async (chatId) =>
+        {
+            var _Id = Guid.Parse(chatId);
+            var c = await http.GetFromJsonAsync<UserChat>($"api/GetNewChat/{chatId}");
+            var isExist = listofchats.Any(x => x.Id == _Id);
+            if (!isExist)
+                listofchats.Add(c);
+            listofchats = listofchats.OrderByDescending(x => x.DateCreated).ToList();
+            StateHasChanged();
+        });
+        user = await Core.GetInstance().GetUser(localStorage);
+
+        listoftopstudents = await http.GetFromJsonAsync<List<ExamRecord>>($"api/GetTopStudentList");
+        if (listoftopstudents != null)
+        {
+            chartLabels = new();
+            chartData = new();
+            foreach (var i in listoftopstudents)
+            {
+                chartLabels.Add($"{i.Student.Account.LastName}, {i.Student.Account.FirstName}");
+                chartData.Add(i.Score);
+            }
+        }
+        listofannouncements = await http.GetFromJsonAsync<List<AdminAnnouncement>>($"admin/GetAnnouncements");
+        listofchats = await http.GetFromJsonAsync<List<UserChat>>($"api/GetChats");
+        listofusers = await http.GetFromJsonAsync<List<UserAccount>>($"api/GetUserAccounts");
+    }
+    bool IsSending = false;
+    async Task ChatSend()
+    {
+        if (!string.IsNullOrEmpty(_newChat.ChatMessage))
+        {
+            _newChat.UserId = user.Id;
+            listofchats.Add(_newChat);
+            listofchats = listofchats.OrderByDescending(x => x.DateCreated).ToList();
+            IsSending = true;
+            StateHasChanged();
+            var post = await http.PostAsJsonAsync<UserChat>($"api/SaveNewChat", _newChat);
+            if (post.IsSuccessStatusCode)
+            {
+                var data = await post.Content.ReadFromJsonAsync<UserChat>();
+                await hubConnection.SendAsync("NotifyChat", data.Id.ToString());
+                _newChat = new();
+                IsSending = false;
+                StateHasChanged();
+            }
+        }
+    }
+
+    string GetUserFullname(Guid id)
+    {
+        var user = listofusers.Where(x => x.Id == id).FirstOrDefault();
+        return $"{user.FirstName} {user.LastName}";
+    }
+    private async Task OnKeyPressInChat(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ChatSend();
+        }
+    }
+}
+<div class="row">
+    <div class="col-xl-12">
+        <MudPaper Elevation="25">
+            <MudCarousel Style="height:400px;" ShowArrows ShowDelimiters="false" AutoCycle="true" TData="object">
+                <MudCarouselItem Class="text-center" Transition="Transition.Fade">
+                    <img src="@($"{nav.BaseUri}img/icon_black.png")" />
+                    <MudText Typo="Typo.h4" Class="m-5">REPRODEV</MudText>
+                    <p class="m-5">Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.</p>
+                </MudCarouselItem>
+            </MudCarousel>
+            <p class="text-center m-3">
+                <MudButton OnClick="@(()=> nav.NavigateTo($"{nav.BaseUri}register"))" Class="mb-5" Color="Color.Primary" Size="Size.Large">Get Started</MudButton>
+            </p>
+        </MudPaper>
+    </div>
+    <div class="col-xl-8">
+        <MudPaper Class="mt-3 p-3" Elevation="25">
+            <MudText Typo="Typo.h5">Top 3</MudText>
+            <MudChart Width="230px"
+                      Height="230px"
+                      ChartType="ChartType.Pie"
+                      InputData="@chartData.ToArray()"
+                      InputLabels="@chartLabels.ToArray()" />
+        </MudPaper>
+        <MudDivider Class="m-5" />
+        <MudPaper Style="max-height:500px;" Elevation="0">
+            <MudText GutterBottom Typo="Typo.h5">Announcements</MudText>
+            <ul>
+                @foreach (var i in listofannouncements)
+                {
+                    <li>
+                        <i>@i.DateCreated.ToString("MMM dd, yyyy hh:mm tt")</i>
+                        <p>@i.Message</p>
+                    </li>
+                }
+            </ul>
+            @if (listofannouncements.Count == 0)
+            {
+                <p class="text-center p-3">
+                    <i>No announcement posted yet.</i>
+                </p>
+            }
+        </MudPaper>
+    </div>
+    <div class="col-md-4">
+        <MudPaper Elevation="25" Class="py-4 flex-grow-1">
+            <MudToolBar Dense="true">
+                <MudIcon Icon="@Icons.Material.Outlined.ChatBubble" Style="margin-right:10px" />
+                <MudText Typo="Typo.h6">Live Chat</MudText>
+            </MudToolBar>
+            <MudContainer Style="max-height:65vh;min-height:65vh;overflow:scroll">
+                <MudList Dense DisableGutters DisablePadding>
+                    @foreach (var i in listofchats)
+                    {
+                        <MudListItem Avatar="@Icons.Material.Filled.Person" av Dense>
+                            <MudText GutterBottom Typo="Typo.caption">@GetUserFullname(i.UserId)</MudText>
+                            <p class="p-0 m-0">
+                                <MudText Typo="Typo.caption" Style="font-size: xx-small!important;" Class="float-right">@Helper.toFriendlyDate(i.DateCreated)</MudText>
+                                <MudText>@i.ChatMessage</MudText>
+                            </p>
+                        </MudListItem>
+                        <MudDivider DividerType="DividerType.Inset"/>
+                    }
+                </MudList>
+            </MudContainer>
+            
+            
+            <MudPaper Elevation="1" Class="d-flex flex-row px-2 mx-4">
+                <MudTextField Disabled="user == null || IsSending" @onkeypress="OnKeyPressInChat" T="string" Placeholder="Write a message here..." DisableUnderLine="true" Class="mt-n2 mx-4" @bind-Value="_newChat.ChatMessage" />
+                <MudButton Disabled="user == null || IsSending" OnClick="ChatSend" StartIcon="@Icons.Material.Outlined.Send" Color="Color.Secondary" ButtonType="ButtonType.Button">Send</MudButton>
+            </MudPaper>
+        </MudPaper>
+        @*<MudCard Class="mt-3" Elevation="25">
+                <MudCardHeader>
+                    Live Chat
+                </MudCardHeader>
+                <MudCardContent Style="height:225px;max-height:225px;overflow:scroll">
+                    <MudList Dense DisableGutters DisablePadding>
+                        @foreach (var i in listofchats)
+                        {
+                            <MudListItem Icon="@Icons.Material.Filled.Person" Dense>
+                                <MudText GutterBottom Typo="Typo.caption">@i.UserId</MudText>
+                                <MudText>@i.ChatMessage</MudText>
+                            </MudListItem>
+                        }
+                    </MudList>
+                </MudCardContent>
+                <MudCardActions>
+                    <MudTextField Disabled="user == null" Class="ml-2 mr-2" OnAdornmentClick="ChatSend" @bind-Value="_newChat.ChatMessage" Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Send" AdornmentColor="Color.Default" Variant="Variant.Text" />
+                </MudCardActions>
+            </MudCard>*@
+    </div>
+    <div class="col-xl-12">
+        <MudDivider Class="m-5" />
+        <p class="text-center">
+            <MudText Class="m-3" Align="Align.Center" Typo="Typo.h4" Color="Color.Primary">ABOUT US</MudText>
+            It is a long established fact that a reader will be distracted by the readable content of a page when looking at its layout. The point of using Lorem Ipsum is that it has a more-or-less normal distribution of letters, as opposed to using 'Content here, content here', making it look like readable English. Many desktop publishing packages and web page editors now use Lorem Ipsum as their default model text, and a search for 'lorem ipsum' will uncover many web sites still in their infancy. Various versions have evolved over the years, sometimes by accident, sometimes on purpose (injected humour and the like).
+        </p>
+    </div>
+</div>
+
+
+
+
+
+
+<MudDivider Class="m-5" />
+
+<MudToolBar>
+    <MudIcon Class="m-4" Size="Size.Large" Color="Color.Primary" Icon="@Icons.Custom.Brands.Facebook" />
+    <MudIcon Class="m-4" Size="Size.Large" Color="Color.Primary" Icon="@Icons.Custom.Brands.Google" />
+    <MudIcon Class="m-4" Size="Size.Large" Color="Color.Primary" Icon="@Icons.Custom.Brands.Twitter" />
+    <MudIcon Class="m-4" Size="Size.Large" Color="Color.Primary" Icon="@Icons.Custom.Brands.YouTube" />
+</MudToolBar>
+
+<MudDivider Class="m-5" />

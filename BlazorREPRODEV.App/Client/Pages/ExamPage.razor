@@ -1,0 +1,385 @@
+﻿@page "/subjects/exams"
+@code {
+    List<BreadcrumbItem> _items = new List<BreadcrumbItem>();
+    List<Exam> listofexams;
+    HubConnection hubConnection;
+    //MudListItem selectedItem;
+    Exam selectedExam;
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            hubConnection = new HubConnectionBuilder().WithUrl($"{nav.BaseUri}hubs/applicationHub").WithAutomaticReconnect().Build();
+            if (hubConnection.State != HubConnectionState.Connected) await hubConnection.StartAsync();
+            hubConnection.On("NotifyExamPage", async () =>
+            {
+                await LoadList();
+                StateHasChanged();
+            });
+        }
+        catch (Exception) { }
+
+        _items = new List<BreadcrumbItem>
+        {
+            new BreadcrumbItem("Board Exam Subjects", href: $"{nav.BaseUri}subjects", icon: Icons.Material.Filled.Subject),
+            new BreadcrumbItem("Exams", href: null, disabled: true, icon: Icons.Material.Filled.Book)
+        };
+
+        await LoadList();
+    }
+
+    async Task LoadList()
+    {
+        listofexams = await http.GetFromJsonAsync<List<Exam>>($"api/GetExams");
+        if(selectedExam != null)
+        {
+            selectedExam = listofexams.Where(x => x.Id == selectedExam.Id).FirstOrDefault();
+            StateHasChanged();
+        }
+    }
+
+    async Task ShowDialogAdd()
+    {
+        var d = dialog.Show<DialogAddExam>("New Exam", new DialogOptions() { MaxWidth = MaxWidth.Small });
+        var rs = await d.Result;
+        if (!rs.Cancelled)
+        {
+            var data = (Exam) rs.Data;
+            selectedExam = data;
+            await LoadList();
+            StateHasChanged();
+        }
+    }
+    void SelectedItemChanged(MudListItem e)
+    {
+        var _Id = Guid.Parse(e.Tag.ToString());
+        selectedExam = listofexams.Where(x => x.Id == _Id).FirstOrDefault();
+        StateHasChanged();
+    }
+    void SelectedTableItem(Exam e)
+    {
+        selectedExam = e;
+        StateHasChanged();
+    }
+    public string searchString = string.Empty;
+    async Task ShowDialogBrowseQuestion()
+    {
+        if(selectedExam != null)
+        {
+            var d = dialog.Show<DialogBrowseQuestion>("Browse Questions",
+                new DialogParameters() { ["data"] = selectedExam.ExamQuestions },
+                new DialogOptions() { MaxWidth = MaxWidth.Medium });
+            var rs = await d.Result;
+            if (!rs.Cancelled)
+            {
+                var listofselectedquestions = (List<Question>)rs.Data;
+                var param = new ExamViewModel();
+                param.ListOfQuestions = listofselectedquestions;
+                param.ExamId = selectedExam.Id;
+                var updateExamResult = await http.PostAsJsonAsync<ExamViewModel>($"api/AddExamQuestion", param);
+                if (updateExamResult.IsSuccessStatusCode)
+                {
+                    selectedExam = await updateExamResult.Content.ReadFromJsonAsync<Exam>();
+                    StateHasChanged();
+                    snackbar.Add("New question(s) added.");
+                    try
+                    {
+                        await hubConnection.SendAsync("NotifyExamPage");
+                    }
+                    catch (Exception) { }
+                }
+            }
+        }
+
+    }
+    bool IsRemovingQuestion = false;
+    async Task DeleteQuestionClick(ExamQuestion c)
+    {
+        if(selectedExam != null)
+        {
+            IsRemovingQuestion = true;
+            StateHasChanged();
+            var rs = await http.PostAsJsonAsync<ExamQuestion>($"api/RemoveExamQuestion", c);
+            if (rs.IsSuccessStatusCode)
+            {
+                var data = await rs.Content.ReadFromJsonAsync<ExamQuestion>();
+                selectedExam.ExamQuestions.Remove(c);
+                StateHasChanged();
+                snackbar.Add("Question removed.");
+                try
+                {
+                    await hubConnection.SendAsync("NotifyExamPage");
+                }
+                catch (Exception) { }
+                IsRemovingQuestion = false;
+                StateHasChanged();
+            }
+        }
+    }
+    private async void OnSettingsClick()
+    {
+        if(selectedExam != null)
+        {
+            bool? result = await dialog.ShowMessageBox(
+            "Publish",
+            $"You are now publishing this exam. Once published, this will be available to all examinee.",
+            yesText: "Publish", noText: "Remove" , cancelText: "Cancel");
+            if (result.HasValue)
+            {
+                if (result.Value)
+                {
+                    snackbar.Add("Publishing...");
+                    var d = await http.PostAsJsonAsync<Exam>($"api/PublishExam", selectedExam);
+                    if (d.IsSuccessStatusCode)
+                    {
+                        var data = await d.Content.ReadFromJsonAsync<Exam>();
+                        await Task.Delay(3000);
+                        selectedExam = data;
+                        StateHasChanged();
+                        snackbar.Clear();
+                        snackbar.Add($"{selectedExam.ExamName} is now live.");
+                        await LoadList();
+                        StateHasChanged();
+                        try
+                        {
+                            await hubConnection.SendAsync("NotifyExamPage");
+                        }
+                        catch (Exception) { }
+                    }
+                }
+                else
+                {
+                    snackbar.Add("Removing...");
+                    var d = await http.PostAsJsonAsync<Exam>($"api/RemoveExam", selectedExam);
+                    if (d.IsSuccessStatusCode)
+                    {
+                        var data = await d.Content.ReadFromJsonAsync<Exam>();
+                        await Task.Delay(3000);
+                        selectedExam = data;
+                        StateHasChanged();
+                        snackbar.Clear();
+                        snackbar.Add($"{selectedExam.ExamName} is now inative.");
+                        await LoadList();
+                        StateHasChanged();
+                        try
+                        {
+                            await hubConnection.SendAsync("NotifyExamPage");
+                        }
+                        catch (Exception) { }
+                    }
+                }
+
+            }
+
+        }
+    }
+    string GetStatus(Exam e)
+    {
+        string rs = string.Empty;
+        if(e.IsLive == 1)
+        {
+            rs = "Live";
+        }
+        if(e.IsLive == 2)
+        {
+            rs = "Inactive";
+        }
+        return rs;
+    }
+    Color GetStatusColor(Exam e)
+    {
+        Color rs = Color.Secondary;
+        if (e.IsLive == 1)
+        {
+            rs = Color.Success;
+        }
+        if (e.IsLive == 2)
+        {
+            rs = Color.Warning;
+        }
+        if (e.IsLive == 0)
+        {
+            rs = Color.Secondary;
+        }
+
+        return rs;
+    }
+    string strMenu = "Sort By";
+    async void ChangeMenu(int i)
+    {
+        listofexams = null;
+        await Task.Delay(500);
+        listofexams = await http.GetFromJsonAsync<List<Exam>>($"api/GetExams");
+        if (i == 1)
+        {
+            listofexams = listofexams.Where(x=>x.IsLive == 1).ToList();
+            strMenu = "Live";
+        }
+        if(i == 2)
+        {
+            listofexams = listofexams.Where(x => x.IsLive == 0).ToList();
+            strMenu = "Unpublish";
+        }
+        if(i == 3)
+        {
+            listofexams = listofexams.Where(x => x.IsLive == 2).ToList();
+            strMenu = "Inactive";
+        }
+        StateHasChanged();
+    }
+
+}
+<MudBreadcrumbs Items="_items" />
+
+
+<MudPaper Elevation="25" Class="p-3 mt-3">
+    <div class="row">
+        <div class="col-xl-12">
+            <MudToolBar Class="pl-1 pr-1">
+                <MudTooltip Placement="Placement.Top" Text="Sort">
+                    <MudMenu Direction="Direction.Left" Label="@strMenu" Icon="@Icons.Material.Filled.Sort" Class="mr-3">
+                        <MudMenuItem OnClick="@(()=> ChangeMenu(1))">Live</MudMenuItem>
+                        <MudMenuItem OnClick="@(()=> ChangeMenu(2))">Unpublish</MudMenuItem>
+                        <MudMenuItem OnClick="@(()=> ChangeMenu(3))">Inactive</MudMenuItem>
+                    </MudMenu>
+                </MudTooltip>
+                <MudTooltip Placement="Placement.Top" Text="Add new exam">
+                    <MudIconButton OnClick="ShowDialogAdd" Icon="@Icons.Material.Filled.Create" />
+                </MudTooltip>
+                <MudToolBarSpacer />
+
+            </MudToolBar>
+        </div>
+        <div class="col-xl-5">
+            @if (listofexams != null)
+            {
+                <MudTable Class="mb-3" Items="listofexams.OrderByDescending(x=>x.IsLive)" Hover MultiSelection="false" SelectedItemChanged="@((e)=> { SelectedTableItem(e); })" T="Exam">
+                    <RowTemplate Context="i">
+                        @{
+                            string sl = selectedExam == i ? "pointer:cursor;background-color:steelblue;color:white" : "pointer:cursor;background-color:inherit;color:inherit";
+                        }
+                        <MudTd Style="@sl">
+                            <MudBadge Style="width:100%" Dot="true" Color="@GetStatusColor(i)">
+                                <div style="cursor:pointer;width:100%">
+
+                                    <MudText GutterBottom Typo="Typo.h5">@i.ExamName</MudText>
+                                    @if (i.MinutesDuration > 1)
+                                    {
+                                        <MudText Typo="Typo.body1">
+                                            Duration: @i.MinutesDuration minutes
+                                        </MudText>
+                                    }
+                                    else if (i.MinutesDuration == 1)
+                                    {
+                                        <MudText Typo="Typo.body1">
+                                            Duration: @i.MinutesDuration minute
+                                        </MudText>
+                                    }
+                                    else
+                                    {
+                                        <MudText Typo="Typo.body1">
+                                            Duration: No limit
+                                        </MudText>
+                                    }
+                                    <MudText Typo="Typo.body1">Schedule: @i.DateStart.ToShortDateString() - @i.DateEnd.ToShortDateString()</MudText>
+                                    <MudToolBar DisableGutters Dense Class="align-middle p-0 m-0">
+                                        @{
+                                            int numberofquestions = i.ExamQuestions != null ? i.ExamQuestions.Count : 0;
+                                        }
+                                        <MudText Typo="Typo.body1">No. of question: @numberofquestions</MudText>
+                                        <MudToolBarSpacer />
+                                        <MudText Typo="Typo.caption">
+                                            @Helper.toFriendlyDate(i.DateCreated)
+                                        </MudText>
+                                    </MudToolBar>
+                                </div>
+                            </MudBadge>
+                        </MudTd>
+                    </RowTemplate>
+                    <PagerContent>
+                        <MudTablePager PageSizeOptions="new int[]{5, 10, 50, 100, 500}" />
+                    </PagerContent>
+                </MudTable>
+            }
+            else
+            {
+                <MudList>
+                    <MudSkeleton Width="70%" />
+                    <MudSkeleton Width="30%" />
+                    <MudToolBar DisableGutters Dense Class="align-middle">
+                        <MudSkeleton Width="20%" />
+                        <MudToolBarSpacer />
+                        <MudSkeleton Width="20%" />
+                    </MudToolBar>
+                </MudList>
+            }
+        </div>
+        <div class="col-xl-7">
+            @if (selectedExam != null)
+            {
+            <MudPaper Elevation="25" Class="p-2 mb-3">
+                <MudToolBar Dense Class="align-middle pl-1 pr-1">
+                    <MudTooltip Placement="Placement.Top" Text="@GetStatus(selectedExam)">
+                        <MudBadge Bottom="false" Left="true" Dot="true" Color="@GetStatusColor(selectedExam)">
+                            <MudText GutterBottom Typo="Typo.h5">@selectedExam.ExamName</MudText>
+                        </MudBadge>
+                    </MudTooltip>
+                    <MudToolBarSpacer />
+                    <MudTooltip Text="@(selectedExam.IsLive == 0 ? "This exam is not yet publish" : "Students who took the exam")">
+                        <MudIconButton Disabled="@(selectedExam.IsLive == 0)" Icon="@Icons.Material.Filled.People" />
+                    </MudTooltip>
+                    <MudTooltip Text="@(selectedExam.IsLive == 1 ? "You cannot add a question in a live exam" : "Browse Questions")">
+                        <MudIconButton Disabled="@(selectedExam.IsLive == 1)" OnClick="ShowDialogBrowseQuestion" Icon="@Icons.Material.Filled.FolderOpen" />
+                    </MudTooltip>
+                    <MudTooltip Text="Settings">
+                        <MudIconButton OnClick="OnSettingsClick" Icon="@Icons.Material.Filled.Settings" />
+                    </MudTooltip>
+
+                </MudToolBar>
+                <MudTable Dense Bordered Elevation="0" Outlined="false" Context="c" Items="@selectedExam.ExamQuestions.OrderByDescending(x=>x.DateAdded)" Hover="true" Breakpoint="Breakpoint.Xs">
+                    <HeaderContent>
+                        <MudTh>Question</MudTh>
+                        <MudTh>Correct Answer</MudTh>
+                        <MudTh Style="width:1%">*</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Question">@c.QuestionData.MyQuestion</MudTd>
+                        <MudTd DataLabel="CorrectAnswer">@c.QuestionData.CorrectAnswer</MudTd>
+                        <MudTd Style="width:1%">
+                            @if (IsRemovingQuestion)
+                                {
+                                <MudProgressCircular Indeterminate Color="Color.Default" Size="Size.Small" />
+                                }
+                                else
+                                {
+                                <MudIconButton Disabled="IsRemovingQuestion || selectedExam.IsLive == 1 || selectedExam.IsLive == 2" OnClick="@(()=> DeleteQuestionClick(c))" Icon="@Icons.Material.Filled.Delete" Size="@Size.Small" Color="Color.Secondary" Variant="Variant.Text" />
+                                }
+                        </MudTd>
+                    </RowTemplate>
+                    <PagerContent>
+                        <MudTablePager PageSizeOptions="new int[]{5, 10, 50, 100, 500}" />
+                    </PagerContent>
+                </MudTable>
+                @if (selectedExam.ExamQuestions.Count == 0)
+                {
+                    <p class="p-5 text-center">
+                        <i>No questions added yet.</i>
+                    </p>
+                }
+            </MudPaper>
+                
+            }
+            else
+            {
+                <MudPaper Elevation="25" Outlined Class="p-2 mb-3">
+                    <p class="text-center p-3">
+                        <i>No selected exam.</i>
+                    </p>
+                </MudPaper>
+            }
+        </div>
+    </div>
+</MudPaper>
+
+
+

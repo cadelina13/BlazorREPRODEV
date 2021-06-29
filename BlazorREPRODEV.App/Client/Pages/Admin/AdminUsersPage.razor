@@ -1,0 +1,185 @@
+﻿@page "/admin/users"
+@implements IDisposable
+@code {
+    System.Timers.Timer timer = new System.Timers.Timer(100);
+    public void Dispose() => timer?.Dispose();
+    UserAccount user;
+
+    List<UserAccount> listofusers;
+    HubConnection hubConnection;
+    UserAccount selectedRow;
+    protected override async Task OnInitializedAsync()
+    {
+        hubConnection = await Core.GetInstance().GetHub(nav.BaseUri);
+        user = await Core.GetInstance().GetUser(localStorage);
+        if (user == null)
+        {
+            nav.NavigateTo($"{nav.BaseUri}authentication");
+            return;
+        }
+        if(user.UserType != "ADMINISTRATOR")
+        {
+            nav.NavigateTo($"{nav.BaseUri}");
+            return;
+        }
+        timer.Elapsed += async (s, e) =>
+        {
+            await InvokeAsync(StateHasChanged);
+            timer.Stop();
+        };
+        timer.Stop();
+        await LoadUsers();
+    }
+
+    async Task LoadUsers()
+    {
+        listofusers = await http.GetFromJsonAsync<List<UserAccount>>($"admin/GetUsers");
+    }
+
+    private int totalItems;
+    private string searchString = null;
+    private IEnumerable<UserAccount> pagedData;
+    private MudTable<UserAccount> table;
+    private async Task<TableData<UserAccount>> ServerReload(TableState state)
+    {
+        user = await Core.GetInstance().GetUser(localStorage);
+        IEnumerable<UserAccount> data = await http.GetFromJsonAsync<List<UserAccount>>($"admin/GetUsers");
+        if(user != null)
+        {
+            data = data.Where(x => x.Username != user.Username);
+        }
+        data = data.Where(element =>
+        {
+            if (string.IsNullOrWhiteSpace(searchString))
+                return true;
+            if (element.FirstName.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (element.LastName.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+                return true;
+            if ($"{element.Address} {element.Email} {element.ContactNumber}".Contains(searchString))
+                return true;
+            return false;
+        }).ToArray();
+        totalItems = data.Count();
+        switch (state.SortLabel)
+        {
+            case "Fullname":
+                data = data.OrderByDirection(state.SortDirection, o => o.LastName);
+                break;
+            case "Email":
+                data = data.OrderByDirection(state.SortDirection, o => o.Email);
+                break;
+            case "UserType":
+                data = data.OrderByDirection(state.SortDirection, o => o.UserType);
+                break;
+        }
+
+        pagedData = data.Skip(state.Page * state.PageSize).Take(state.PageSize).ToArray();
+        return new TableData<UserAccount>() { TotalItems = totalItems, Items = pagedData };
+    }
+
+    private void OnSearch(string text)
+    {
+        searchString = text;
+        table.ReloadServerData();
+    }
+    bool IsSaving = false;
+    private async Task UpdateUser()
+    {
+        if(selectedRow != null)
+        {
+            IsSaving = true;
+            await InvokeAsync(StateHasChanged);
+
+            var post = await http.PostAsJsonAsync<UserAccount>($"admin/UpdateUser", selectedRow);
+            if (post.IsSuccessStatusCode)
+            {
+                await table.ReloadServerData();
+                var data = await post.Content.ReadFromJsonAsync<UserAccount>();
+                if(data != null)
+                {
+                    snackbar.Add($"{data.FirstName} has been successfully updated.");
+                    IsSaving = false;
+                }
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+}
+
+
+<div class="row">
+    <div class="col-xl-7">
+        <MudTable @bind-SelectedItem="selectedRow"
+                  FixedFooter
+                  FixedHeader Elevation="25"
+                  Class="mb-3"
+                  ServerData="@(new Func<TableState, Task<TableData<UserAccount>>>(ServerReload))"
+                  Dense="true" Hover="true" @ref="table">
+            <ToolBarContent>
+                <MudText GutterBottom Typo="Typo.body1" Color="Color.Primary">User Accounts</MudText>
+                <MudToolBarSpacer />
+                <MudTextField T="string" ValueChanged="@(s=>OnSearch(s))" Placeholder="Search" Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+            </ToolBarContent>
+            <HeaderContent>
+                <MudTh><MudTableSortLabel SortLabel="Fullname" T="UserAccount">Fullname</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortLabel="Email" T="UserAccount">Email</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortLabel="UserType" T="UserAccount">UserType</MudTableSortLabel></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd Style="cursor:pointer" DataLabel="Fullname">@($"{context.LastName}, {context.FirstName}")</MudTd>
+                <MudTd Style="cursor:pointer" DataLabel="Email">@context.Email</MudTd>
+                <MudTd Style="cursor:pointer" DataLabel="UserType">@context.UserType</MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager />
+            </PagerContent>
+        </MudTable>
+    </div>
+    <div class="col-xl-5">
+        <MudPaper Class="p-2" Elevation="25">
+            <MudText GutterBottom Color="Color.Primary">Account Information</MudText>
+            <MudDivider DividerType="DividerType.FullWidth" Class="m-2" />
+            @if (selectedRow != null)
+            {
+                timer.Start();
+                <EditForm OnValidSubmit="UpdateUser" Model="selectedRow">
+                    <div class="row">
+                        <div class="col-sm-6" style="cursor: not-allowed">
+                            <MudTextField Disabled Class="mb-2" @bind-Value="selectedRow.Username" Style="cursor:not-allowed" ReadOnly Label="Username" Variant="Variant.Outlined" FullWidth Immediate="false" Required />
+                        </div>
+                        <div class="col-sm-6">
+                            <MudTextField Class="mb-2" @bind-Value="selectedRow.Password" Label="Password" Variant="Variant.Outlined" FullWidth Immediate="false" Required />
+                        </div>
+                        <div class="col-sm-6">
+                            <MudTextField Class="mb-2" @bind-Value="selectedRow.FirstName" Label="First Name" Variant="Variant.Outlined" FullWidth Immediate="false" Required />
+                        </div>
+                        <div class="col-sm-6">
+                            <MudTextField Class="mb-2" @bind-Value="selectedRow.LastName" Label="Last Name" Variant="Variant.Outlined" FullWidth Immediate="false" Required />
+                        </div>
+                        <div class="col-sm-6">
+                            <MudTextField Class="mb-2" @bind-Value="selectedRow.ContactNumber" Label="Contact Number" Variant="Variant.Outlined" FullWidth Immediate="false" Required />
+                        </div>
+                        <div class="col-sm-6">
+                            <MudTextField Class="mb-2" @bind-Value="selectedRow.Email" Label="Email" Variant="Variant.Outlined" FullWidth Immediate="false" Required />
+                        </div>
+                        <div class="col-sm-12">
+                            <MudTextField Class="mb-2" @bind-Value="selectedRow.Address" Label="Address" Variant="Variant.Outlined" FullWidth Immediate="false" Required />
+                        </div>
+                        <div class="col-sm-7">
+                            <MudSelect Dense @bind-Value="selectedRow.UserType" Variant="Variant.Outlined" Label="Usert Type" Required Immediate="false" T="string">
+                                <MudSelectItem T="string" Value="@("INSTRUCTOR")"></MudSelectItem>
+                                <MudSelectItem T="string" Value="@("STUDENT")"></MudSelectItem>
+                                <MudSelectItem T="string" Value="@("ADMINISTRATOR")"></MudSelectItem>
+                            </MudSelect>
+                        </div>
+                        <div class="col-sm-5">
+                            <MudButton ButtonType="ButtonType.Submit" Disabled="IsSaving" Class="align-middle float-right mt-2" StartIcon="@Icons.Material.Filled.Save" Color="Color.Primary" Size="Size.Small" Variant="Variant.Filled">Update</MudButton>
+                        </div>
+                    </div>
+                </EditForm>
+            }
+        </MudPaper>
+    </div>
+</div>

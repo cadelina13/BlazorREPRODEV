@@ -1,0 +1,121 @@
+﻿
+@code {
+    [CascadingParameter] MudDialogInstance _mudDialog { get; set; }
+    [Parameter]
+    public List<Guid> myexams { get; set; }
+    List<Exam> listofavailable;
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+
+    }
+    async Task LoadData()
+    {
+        await Task.Delay(500);
+        listofavailable = await http.GetFromJsonAsync<List<Exam>>($"api/AvailableExams");
+        listofavailable = listofavailable.Where(x => !myexams.Contains(x.Id)).ToList();
+    }
+    void Cancel() => _mudDialog.Close(DialogResult.Cancel());
+    void ViewExamDetails(string examId)
+    {
+        nav.NavigateTo($"{nav.BaseUri}q/{examId}");
+    }
+}
+
+<MudDialog>
+    <DialogContent>
+        @if (listofavailable == null)
+        {
+        <MudList Dense Class="m-0">
+            <MudListItem>
+                <p class="p-0 m-0">
+                    <MudSkeleton Class="float-right" Width="15%" />
+                    <MudSkeleton Width="75%" />
+                </p>
+                <p class="p-0 m-0">
+                    <MudSkeleton Class="float-right" Width="15%" />
+                    <MudSkeleton Width="55%" />
+                </p>
+            </MudListItem>
+            <MudDivider DividerType="DividerType.FullWidth" />
+            <MudListItem>
+                <p class="p-0 m-0">
+                    <MudSkeleton Class="float-right" Width="15%" />
+                    <MudSkeleton Width="75%" />
+                </p>
+                <p class="p-0 m-0">
+                    <MudSkeleton Class="float-right" Width="15%" />
+                    <MudSkeleton Width="55%" />
+                </p>
+            </MudListItem>
+            <MudDivider DividerType="DividerType.FullWidth" />
+            <MudListItem>
+                <p class="p-0 m-0">
+                    <MudSkeleton Class="float-right" Width="15%" />
+                    <MudSkeleton Width="75%" />
+                </p>
+                <p class="p-0 m-0">
+                    <MudSkeleton Class="float-right" Width="15%" />
+                    <MudSkeleton Width="55%" />
+                </p>
+            </MudListItem>
+            <MudDivider DividerType="DividerType.FullWidth" />
+            <MudListItem>
+                <p class="p-0 m-0">
+                    <MudSkeleton Class="float-right" Width="15%" />
+                    <MudSkeleton Width="75%" />
+                </p>
+                <p class="p-0 m-0">
+                    <MudSkeleton Class="float-right" Width="15%" />
+                    <MudSkeleton Width="55%" />
+                </p>
+            </MudListItem>
+            <MudDivider DividerType="DividerType.FullWidth" />
+        </MudList>
+        }
+        else
+        {
+            <MudList Clickable Dense Class="m-0">
+                @foreach (var i in listofavailable)
+                {
+                    <MudListItem OnClick="@(()=> ViewExamDetails(i.Id.ToString()))">
+                        <p class="p-0 m-0">
+                            @if (i.ExamQuestions.Count == 0)
+                            {
+                                <MudText Class="float-right" Typo="Typo.caption">@i.ExamQuestions.Count item</MudText>
+                            }
+                            else
+                            {
+                                <MudText Class="float-right" Typo="Typo.caption">@i.ExamQuestions.Count items</MudText>
+                            }
+                            <MudText Typo="Typo.body1">@i.ExamName</MudText>
+                        </p>
+                        <p class="p-0 m-0">
+                            <MudText Class="float-right" Typo="Typo.caption">@Helper.toFriendlyDate(i.DateCreated)</MudText>
+                            @if (i.MinutesDuration == 0)
+                            {
+                                <MudText Typo="Typo.caption">
+                                    <MudIcon Icon="@Icons.Material.Filled.Timer" Size="Size.Small" Color="Color.Default" /> No timer
+                                </MudText>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.caption">
+                                    <MudIcon Icon="@Icons.Material.Filled.Timer" Size="Size.Small" Color="Color.Default" /> @i.MinutesDuration mins
+                                </MudText>
+                            }
+                            
+                        </p>
+                    </MudListItem>
+                    <MudDivider DividerType="DividerType.FullWidth"/>
+                }
+            </MudList>
+        }
+
+    </DialogContent>
+    <DialogActions>
+        <MudButton Size="Size.Small" OnClick="Cancel" Color="Color.Default" StartIcon="@Icons.Material.Outlined.Cancel" Variant="Variant.Filled">
+            Dismiss
+        </MudButton>
+    </DialogActions>
+</MudDialog>

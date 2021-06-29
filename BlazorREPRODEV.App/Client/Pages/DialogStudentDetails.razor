@@ -1,0 +1,50 @@
+﻿@code {
+    [CascadingParameter] MudDialogInstance _mudDialog { get; set; }
+    [Parameter]
+    public UserAccount user { get; set; }
+    async Task Submit() => _mudDialog.Close(DialogResult.Ok(true));
+    void Cancel() => _mudDialog.Close(DialogResult.Cancel());
+
+    void ShowPassword()
+    {
+        input = input == InputType.Password ? InputType.Text : InputType.Password;
+    }
+    InputType input = InputType.Password;
+}
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body1">Personnal Information</MudText>
+        <div class="row">
+            <div class="col-xl-6">
+                <MudTextField ReadOnly Class="mb-3" Label="First Name" @bind-Value="@user.FirstName" Variant="Variant.Outlined" />
+            </div>
+            <div class="col-xl-6">
+                <MudTextField ReadOnly Class="mb-3" Label="Last Name" @bind-Value="@user.LastName" Variant="Variant.Outlined" />
+            </div>
+            <div class="col-xl-6">
+                <MudTextField ReadOnly Class="mb-3" Label="Email" @bind-Value="@user.Email" Variant="Variant.Outlined" />
+            </div>
+            <div class="col-xl-6">
+                <MudTextField ReadOnly Class="mb-3" Label="Contact" @bind-Value="@user.ContactNumber" Variant="Variant.Outlined" />
+            </div>
+            <div class="col-xl-12">
+                <MudTextField ReadOnly Label="Address" @bind-Value="@user.Address" Variant="Variant.Outlined" />
+            </div>
+        </div>
+        <MudText Typo="Typo.body1">Account Information</MudText>
+        <div class="row">
+            <div class="col-xl-6">
+                <MudTextField ReadOnly Class="mb-3" Label="Username" @bind-Value="@user.Username" Variant="Variant.Outlined" />
+            </div>
+            <div class="col-xl-6">
+                <MudTextField ReadOnly OnAdornmentClick="ShowPassword" Class="mb-3" AdornmentIcon="@(input == InputType.Password ? Icons.Material.Outlined.Visibility : Icons.Material.Outlined.VisibilityOff)" IconSize="Size.Small" Adornment="Adornment.End" InputType="input" Label="Password" @bind-Value="@user.Password" Variant="Variant.Outlined" />
+            </div>
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton DisableElevation Size="Size.Small" OnClick="Cancel" Color="Color.Default" StartIcon="@Icons.Material.Filled.Cancel" Variant="Variant.Filled">
+            Dismiss
+        </MudButton>
+    </DialogActions>
+</MudDialog>
