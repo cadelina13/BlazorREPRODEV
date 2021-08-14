@@ -15,6 +15,7 @@
         IsLoggingIn = true;
         StateHasChanged();
         var rs = await http.PostAsJsonAsync<UserAccount>($"{nav.BaseUri}api/Account/SignIn", user);
+        
         if (rs.IsSuccessStatusCode)
         {
             var result = await rs.Content.ReadFromJsonAsync<UserAccount>();
@@ -79,11 +80,11 @@
             }
             <MudToolBar Dense>
                 <MudButton OnClick="@(()=> nav.NavigateTo($"{nav.BaseUri}register"))" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">
-                    Regsiter new account
+                    Register new account
                 </MudButton>
                 <MudToolBarSpacer />
                 <MudButton OnClick="SignInClick" Disabled="IsLoggingIn" StartIcon="@(IsLoggingIn ? Icons.Material.Filled.LockOpen : Icons.Material.Filled.Lock)" Variant="Variant.Filled" Color="Color.Primary">
-                    @(IsLoggingIn ? "Singing In..." : "Sigin In")
+                    @(IsLoggingIn ? "Signing In..." : "Sign In")
                 </MudButton>
             </MudToolBar>
             @if (IsLoggingIn)

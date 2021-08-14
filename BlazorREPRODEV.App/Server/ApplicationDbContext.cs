@@ -27,6 +27,7 @@ namespace BlazorREPRODEV.App.Server
         public DbSet<ExamStudentRecord> ExamStudentRecord { get; set; }
         public DbSet<AdminAnnouncement> AdminAnnouncements { get; set; }
         public DbSet<UserChat> UserChats { get; set; }
+        public DbSet<Materials> Materials { get; set; }
 
     }
 }

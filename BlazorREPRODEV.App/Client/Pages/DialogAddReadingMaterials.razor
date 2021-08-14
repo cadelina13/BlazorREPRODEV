@@ -1,0 +1,88 @@
+﻿@inject IFileReaderService FileReaderService
+
+@code {
+    [CascadingParameter] MudDialogInstance _mudDialog { get; set; }
+    [Parameter]
+    public string UserId { get; set; }
+    Materials data = new();
+    bool IsSaving = false;
+    private ElementReference _input;
+    void Cancel() => _mudDialog.Close(DialogResult.Cancel());
+    async Task Submit()
+    {
+        if (string.IsNullOrEmpty(data.Description))
+        {
+            return;
+        }
+        IsSaving = true;
+        await InvokeAsync(StateHasChanged);
+        data.UserId = Guid.Parse(UserId);
+        var post = await http.PostAsJsonAsync<Materials>($"api/SaveMaterial", data);
+        post.EnsureSuccessStatusCode();
+        if (post.IsSuccessStatusCode)
+        {
+            var rs = await post.Content.ReadFromJsonAsync<Materials>();
+            if(rs != null)
+            {
+                var files = await FileReaderService.CreateReference(_input).EnumerateFilesAsync();
+                var content = new MultipartFormDataContent();
+                content.Headers.ContentDisposition = new ContentDispositionHeaderValue("form-data");
+                content.Headers.Add("id", rs.Id.ToString());
+                foreach (var f in files)
+                {
+                    var fileInfo = await f.ReadFileInfoAsync();
+                    var ms = await f.CreateMemoryStreamAsync(4 * 1024);
+                    //content.Add(new StreamContent(ms, Convert.ToInt32(ms.Length)), fileInfo.Name);
+                    content.Add(CreateFileContent(ms, fileInfo.Name, fileInfo.Type));
+
+                }
+                var postUpload = await http.PostAsync($"api/UploadMaterialAttachment", content);
+                postUpload.EnsureSuccessStatusCode();
+                if (postUpload.IsSuccessStatusCode)
+                {
+                    snackbar.Add("New materials added.");
+                    _mudDialog.Close(DialogResult.Ok(true));
+                }
+            }
+        }
+        IsSaving = false;
+        await InvokeAsync(StateHasChanged);
+    }
+    private StreamContent CreateFileContent(System.IO.Stream stream, string fileName, string contentType)
+    {
+        var fileContent = new StreamContent(stream);
+        fileContent.Headers.ContentDisposition = new ContentDispositionHeaderValue("form-data")
+        {
+            Name = "\"files\"",
+            FileName = "\"" + fileName + "\""
+        }; // the extra quotes are key here
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        return fileContent;
+    }
+
+}
+
+<MudDialog>
+    <DialogContent>
+        <div class="row">
+            <div class="col-sm-12 pb-3">
+                <MudTextField Disabled="IsSaving" @bind-Value="data.Description" Variant="Variant.Outlined" FullWidth Lines="3" />
+            </div>
+            <div class="col-sm-12 pb-3">
+                <input disabled="@(IsSaving)" type="file" @ref="_input" multiple />
+            </div>
+            @if (IsSaving) 
+            { 
+                <div class="col-xl-12">
+                    <p class="mt-3 mb-3">
+                        <MudProgressLinear Static Size="Size.Small" Color="Color.Primary" Indeterminate="true" Class="my-7" />
+                    </p>
+                </div>
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Disabled="@(IsSaving)" Size="Size.Small" OnClick="Cancel" Color="Color.Default" StartIcon="@Icons.Material.Filled.Cancel" Variant="Variant.Filled">Cancel  </MudButton>
+        <MudButton Disabled="@(IsSaving)" Size="Size.Small" OnClick="Submit" Color="Color.Primary" StartIcon="@Icons.Material.Filled.UploadFile" Variant="Variant.Filled">Save  </MudButton>
+    </DialogActions>
+</MudDialog>

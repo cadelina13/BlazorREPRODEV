@@ -1,0 +1,126 @@
+﻿@page "/reading/materials"
+@code {
+    List<MaterialsViewModel> listofMaterialsViewModel;
+    UserAccount user;
+
+    protected override async Task OnInitializedAsync()
+    {
+        user = await Core.GetInstance().GetUser(localStorage);
+        try
+        {
+            listofMaterialsViewModel = await http.GetFromJsonAsync<List<MaterialsViewModel>>("api/GetMaterials");
+        }
+        catch (Exception) { }
+
+    }
+    private IEnumerable<MaterialsViewModel> pagedData;
+    private MudTable<MaterialsViewModel> table;
+
+    private int totalItems;
+    private string searchString = null;
+
+    private async Task<TableData<MaterialsViewModel>> ServerReload(TableState state)
+    {
+        IEnumerable<MaterialsViewModel> data = new List<MaterialsViewModel>();
+        
+        try
+        {
+            data = await http.GetFromJsonAsync<IEnumerable<MaterialsViewModel>>("api/GetMaterials");
+        }
+        catch (Exception) { }
+        data = data.Where(element =>
+        {
+            if (string.IsNullOrWhiteSpace(searchString))
+                return true;
+            if (element.Materials.Description.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+                return true;
+            return false;
+        }).ToArray();
+        totalItems = data.Count();
+        switch (state.SortLabel)
+        {
+            case "Description":
+                data = data.OrderByDirection(state.SortDirection, o => o.Materials.Description);
+                break;
+            case "DateCreated":
+                data = data.OrderByDirection(state.SortDirection, o => o.Materials.DateCreated);
+                break;
+        }
+
+        pagedData = data.Skip(state.Page * state.PageSize).Take(state.PageSize).ToArray();
+        return new TableData<MaterialsViewModel>() { TotalItems = totalItems, Items = pagedData };
+    }
+
+    private void OnSearch(string text)
+    {
+        searchString = text;
+        table.ReloadServerData();
+    }
+    public async Task ShowDialogAdd()
+    {
+        if(user != null)
+        {
+            var d = dialog.Show<DialogAddReadingMaterials>("New Reading Materials",
+                new DialogParameters() { ["UserId"] = user.Id.ToString() },
+                new DialogOptions() { MaxWidth = MaxWidth.Small });
+            var rs = await d.Result;
+            if (!rs.Cancelled)
+            {
+                await table.ReloadServerData();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+    public async Task ShowDialogAttachment(string MaterialId, string desc)
+    {
+        var d = dialog.Show<DialogViewMaterialAttachments>("Attachments",
+                new DialogParameters() { ["MaterialId"] = MaterialId, ["Description"] = desc },
+                new DialogOptions() { MaxWidth = MaxWidth.Small });
+        var rs = await d.Result;
+        if (!rs.Cancelled)
+        {
+            await table.ReloadServerData();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+}
+
+<MudText GutterBottom Typo="Typo.h5" Color="Color.Primary">Reading Materials</MudText>
+
+<div class="row">
+    <div class="col-md-12">
+        <MudTable Elevation="25" ServerData="@(new Func<TableState, Task<TableData<MaterialsViewModel>>>(ServerReload))" @ref="table">
+            <ToolBarContent>
+                <MudTextField T="string" ValueChanged="@(s=>OnSearch(s))" Placeholder="Search" Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0 mb-3"></MudTextField>
+                <MudToolBarSpacer />
+                @if (user != null && user.UserType != "STUDENT")
+                {
+                    <MudButton Disabled="user == null" OnClick="ShowDialogAdd" Variant="Variant.Filled" Size="Size.Small" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add">Add New</MudButton>
+                }
+            </ToolBarContent>
+            <HeaderContent>
+                <MudTh Style="width:1%">*</MudTh>
+                <MudTh><MudTableSortLabel SortLabel="Description" T="MaterialsViewModel">Description</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortLabel="Date" T="MaterialsViewModel">Date</MudTableSortLabel></MudTh>
+                <MudTh>Uploaded by</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>
+                    <MudBadge Overlap Bordered Color="Color.Primary" Content="@(context.NumberOfAttachement)">
+                        <MudIconButton OnClick="@(()=> ShowDialogAttachment(context.Materials.Id.ToString(), context.Materials.Description))" Icon="@Icons.Material.Filled.FolderOpen" Size="Size.Small" Color="Color.Primary" DisableElevation Variant="Variant.Text"/>
+                    </MudBadge>
+                </MudTd>
+                <MudTd DataLabel="Description">@context.Materials.Description</MudTd>
+                <MudTd DataLabel="Date">@Helper.toFriendlyDate(context.Materials.DateCreated)</MudTd>
+                <MudTd>
+                    @context.Instructor.FirstName @context.Instructor.LastName
+                </MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager />
+            </PagerContent>
+        </MudTable>
+
+    </div>
+</div>

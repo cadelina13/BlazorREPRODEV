@@ -16,11 +16,12 @@
                 selectedComponent = com;
                 StateHasChanged();
             });
+            listofsubjects = await http.GetFromJsonAsync<List<Subject>>("api/GetSubjects");
         }
         catch (Exception) { }
 
         //listofsubjects = await Http.CreateClient("api").GetFromJsonAsync<List<Subject>>($"GetSubjects");
-        listofsubjects = await http.GetFromJsonAsync<List<Subject>>("api/GetSubjects");
+
     }
     Func<ComponentSubject, string> converter = p => p?.Name;
     ComponentSubject selectedComponent = null;
@@ -43,7 +44,12 @@
     async Task OnTabChange(int i)
     {
         selectedComponent = null;
-        listofsubjects = await http.GetFromJsonAsync<List<Subject>>("api/GetSubjects");
+        try
+        {
+            listofsubjects = await http.GetFromJsonAsync<List<Subject>>("api/GetSubjects");
+        }
+        catch (Exception) { }
+
         StateHasChanged();
     }
 
@@ -71,12 +77,18 @@
             catch (Exception) { }
         }
     }
+    public async Task downloadTemplate()
+    {
+        var url = $"{nav.BaseUri}api/download/template";
+        await JS.InvokeVoidAsync("methods.downloadFromUrl", new { Url = url, FileName = "QUESTIONNAIRE_TEMPLATE.xlsx" });
+    }
 }
 
 
 <MudToolBar>
     <MudText GutterBottom Typo="Typo.h5" Color="Color.Primary">Board Exam Subjects</MudText>
     <MudToolBarSpacer/>
+    <MudButton OnClick="downloadTemplate" Class="mr-3" StartIcon="@Icons.Custom.FileFormats.FileExcel" Color="Color.Info" Variant="Variant.Filled">Template</MudButton>
     <MudButton OnClick="@(()=> nav.NavigateTo($"{nav.BaseUri}subjects/exams"))" StartIcon="@Icons.Material.Filled.Book" Color="Color.Primary" Variant="Variant.Filled">Exam</MudButton>
 </MudToolBar>
 

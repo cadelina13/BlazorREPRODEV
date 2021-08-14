@@ -13,8 +13,13 @@
     string countdownTimer = "00:00:00";
     protected override async Task OnInitializedAsync()
     {
-        hubConnection = new HubConnectionBuilder().WithUrl($"{nav.BaseUri}hubs/applicationHub").WithAutomaticReconnect().Build();
-        if (hubConnection.State != HubConnectionState.Connected) await hubConnection.StartAsync();
+        try
+        {
+            hubConnection = new HubConnectionBuilder().WithUrl($"{nav.BaseUri}hubs/applicationHub").WithAutomaticReconnect().Build();
+            if (hubConnection.State != HubConnectionState.Connected) await hubConnection.StartAsync();
+        }
+        catch (Exception) { }
+
 
         user = await Core.GetInstance().GetUser(localStorage);
         if (user != null)
@@ -24,7 +29,12 @@
     }
     async Task LoadData()
     {
-        listofrecords = await http.GetFromJsonAsync<List<ExamRecord>>($"api/GetMyExamRecords/{user.Id.ToString()}");
+        try
+        {
+            listofrecords = await http.GetFromJsonAsync<List<ExamRecord>>($"api/GetMyExamRecords/{user.Id.ToString()}");
+        }
+        catch (Exception) { }
+
         if (listofrecords.Count > 0)
         {
             OnProgressTimer();
@@ -58,7 +68,12 @@
                     timer.Enabled = false;
                     timer.Dispose();
                     OnProgressRecord = null;
-                    listofrecords = await http.GetFromJsonAsync<List<ExamRecord>>($"api/GetMyExamRecords/{user.Id.ToString()}");
+                    try
+                    {
+                        listofrecords = await http.GetFromJsonAsync<List<ExamRecord>>($"api/GetMyExamRecords/{user.Id.ToString()}");
+                    }
+                    catch (Exception) { }
+
                     StateHasChanged();
                     return;
                 }

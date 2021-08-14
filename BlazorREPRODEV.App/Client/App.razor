@@ -1,4 +1,4 @@
-<MudThemeProvider />
+<MudThemeProvider Theme="defaultTheme" />
 <MudDialogProvider FullWidth="true"
                    DisableBackdropClick="true"
                    CloseButton="true"
@@ -14,3 +14,17 @@
         </LayoutView>
     </NotFound>
 </Router>
+
+@code{
+    static string colorDefault = "#008A91";
+    MudTheme defaultTheme = new MudTheme()
+    {
+        Palette = new Palette()
+        {
+            Primary = colorDefault,
+            Black = "#272c34",
+            AppbarBackground = colorDefault,
+            AppbarText = "#fff",
+        }
+    };
+}

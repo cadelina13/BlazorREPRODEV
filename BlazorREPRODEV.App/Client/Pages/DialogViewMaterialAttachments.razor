@@ -1,0 +1,66 @@
+﻿@code {
+    [CascadingParameter] MudDialogInstance _mudDialog { get; set; }
+    [Parameter]
+    public string MaterialId { get; set; }
+    [Parameter]
+    public string Description { get; set; }
+
+    void Cancel() => _mudDialog.Close(DialogResult.Cancel());
+    List<MaterialAttachmentViewModel> listofattachments;
+    protected override async Task OnInitializedAsync()
+    {
+
+        try
+        {
+            listofattachments = await http.GetFromJsonAsync<List<MaterialAttachmentViewModel>>($"api/GetMaterialAttachments/{MaterialId}");
+        }
+        catch (Exception) { }
+    }
+
+    public async Task downloadFile(string filename)
+    {
+        var url = $"{nav.BaseUri}api/DownloadMaterial/{MaterialId}/{filename}";
+        await JS.InvokeVoidAsync("methods.downloadFromUrl", new { Url = url, FileName = filename });
+    }
+}
+
+<MudDialog>
+    <DialogContent>
+        <MudText GutterBottom Class="mb-3">@Description</MudText>
+        <div class="row">
+            @if (listofattachments == null)
+            {
+                <div class="col-sm-12 pb-2">
+                    <MudSkeleton Width="100" Height="60px" />
+                </div>
+                <div class="col-sm-12 pb-2">
+                    <MudSkeleton Width="80" />
+                </div>
+                <div class="col-sm-12 pb-2">
+                    <MudSkeleton Width="100" Height="60px" />
+                </div>
+                <div class="col-sm-12 pb-2">
+                    <MudSkeleton Width="80" />
+                </div>
+                <div class="col-sm-12 pb-2">
+                    <MudSkeleton Width="100" Height="60px" />
+                </div>
+                <div class="col-sm-12 pb-2">
+                    <MudSkeleton Width="80" />
+                </div>
+            }
+            else
+            {
+                foreach (var i in listofattachments)
+                {
+                    <div class="col-sm-12 pb-2">
+                        <MudIconButton OnClick="@(()=> downloadFile(i.FileName))" Target="_blank" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Text" Icon="@Icons.Material.Filled.FileDownload"/> <b>@i.FileName</b>
+                    </div>
+                }
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Size="Size.Small" OnClick="Cancel" Color="Color.Default" StartIcon="@Icons.Material.Filled.Close" Variant="Variant.Filled">Dismiss  </MudButton>
+    </DialogActions>
+</MudDialog>

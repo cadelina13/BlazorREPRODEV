@@ -1,9 +1,8 @@
 ﻿@inherits LayoutComponentBase
 @using BlazorREPRODEV.App.Client.Pages
-<MudThemeProvider />
 <MudLayout>
-    <MudAppBar Elevation="1">
-        <img @onclick="@(()=> nav.NavigateTo(nav.BaseUri))" src="/img/icon_white2.png" style="width:50px;height:50px;cursor:pointer" />
+    <MudAppBar Elevation="1" Color="Color.Default">
+        <img @onclick="@(()=> nav.NavigateTo(nav.BaseUri))" src="/img/icon_white_256.png" style="width:50px;height:50px;cursor:pointer" />
         <MudText @onclick="@(()=> nav.NavigateTo(nav.BaseUri))" Style="cursor:pointer" Typo="Typo.h5" Class="ml-4 mr-4">REPRODEV</MudText>
         @if (user != null)
         {
@@ -18,6 +17,7 @@
                     <MudIcon @onclick="ToggleNotification" Icon="@Icons.Material.Filled.Notifications" Color="Color.Inherit" />
                 </MudBadge>
             }
+            
             <MudButton Color="Color.Inherit" StartIcon="@Icons.Material.Filled.Logout" OnClick="@SignOut">Sign Out</MudButton>
             <!--<MudMenu Icon="@Icons.Material.Filled.MoreVert" Direction="Direction.Left" OffsetX="true" Color="Color.Inherit">
         <MudMenuItem>
@@ -108,6 +108,7 @@
                 {
                     <MudNavLink Href="/myexams" Icon="@Icons.Material.Filled.LibraryBooks" Match="NavLinkMatch.All" IconColor="Color.Inherit">My Exams</MudNavLink>
                 }
+                <MudNavLink Href="/reading/materials" Icon="@Icons.Material.Outlined.ChromeReaderMode" Match="NavLinkMatch.All" IconColor="Color.Inherit">Reading Materials</MudNavLink>
 
                 if (user.UserType == "ADMINISTRATOR")
                 {
@@ -226,12 +227,22 @@
     async Task GetPending()
     {
         listofpending = null;
-        listofpending = await http.GetFromJsonAsync<List<RegisteredStudent>>($"api/GetPendingStudent");
+
+        try
+        {
+            listofpending = await http.GetFromJsonAsync<List<RegisteredStudent>>($"api/GetPendingStudent");
+        }
+        catch (Exception) { }
         StateHasChanged();
     }
     async Task LoadNotif()
     {
-        notif = await http.GetFromJsonAsync<NotificationModel>($"api/GetNumberOfPeding");
+        try
+        {
+            notif = await http.GetFromJsonAsync<NotificationModel>($"api/GetNumberOfPeding");
+        }
+        catch (Exception) { }
+
     }
 
     async Task SignOut()

@@ -14,6 +14,7 @@
         IsSaving = true;
         StateHasChanged();
         var d = await http.PostAsJsonAsync<RegisteredStudent>($"api/AddStudent", data);
+        d.EnsureSuccessStatusCode();
         if (d.IsSuccessStatusCode)
         {
             var rs = int.Parse(await d.Content.ReadAsStringAsync());

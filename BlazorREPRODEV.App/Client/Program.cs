@@ -38,7 +38,8 @@ namespace BlazorREPRODEV.App.Client
             });
             builder.Services.AddHttpClient("api", c =>
             {
-                c.BaseAddress = new Uri("https://localhost:22422/api/");
+                //c.BaseAddress = new Uri("https://localhost:22422/api/");
+                c.BaseAddress = new Uri(builder.HostEnvironment.BaseAddress);
             });
             builder.Services.AddFileReaderService(o => o.UseWasmSharedBuffer = true);
             builder.Services.AddBlazoredLocalStorage();

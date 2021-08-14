@@ -14,7 +14,7 @@
             if (hubConnection.State != HubConnectionState.Connected) await hubConnection.StartAsync();
             if (hubConnection.State == HubConnectionState.Disconnected)
                 await hubConnection.StartAsync();
-        }catch(Exception e) { }
+        }catch(Exception) { }
     }
 
     UploadResult uploadResult = null;
@@ -23,10 +23,15 @@
     {
         IsSaving = true;
         StateHasChanged();
-        var rs = await http.GetFromJsonAsync<List<Subject>>($"api/SaveExcel/{uploadResult.FileName}/{selectedComponent.Id.ToString()}");
-        IsSaving = false;
-        await hubConnection.SendAsync("NotifyBoardExamPage", "ee");
-        _mudDialog.Close(DialogResult.Ok(rs));
+        try
+        {
+            var rs = await http.GetFromJsonAsync<List<Subject>>($"api/SaveExcel/{uploadResult.FileName}/{selectedComponent.Id.ToString()}");
+            IsSaving = false;
+            await hubConnection.SendAsync("NotifyBoardExamPage", "ee");
+            _mudDialog.Close(DialogResult.Ok(rs));
+        }
+        catch (Exception) { }
+
     }
     void Cancel() => _mudDialog.Close(DialogResult.Cancel());
     private ElementReference _input;
@@ -54,6 +59,7 @@
                 content.Headers.ContentDisposition = new ContentDispositionHeaderValue("form-data");
                 content.Add(new StreamContent(ms, Convert.ToInt32(ms.Length)), selectedComponent.Id.ToString(), fileInfo.Name);
                 var result = await http.PostAsync($"api/UploadExcel", content);
+                result.EnsureSuccessStatusCode();
                 uploadResult = await result.Content.ReadFromJsonAsync<UploadResult>();
                 IsUploading = false;
                 await InvokeAsync(StateHasChanged);

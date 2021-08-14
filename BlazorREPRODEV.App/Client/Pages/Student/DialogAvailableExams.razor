@@ -11,9 +11,14 @@
     }
     async Task LoadData()
     {
-        await Task.Delay(500);
-        listofavailable = await http.GetFromJsonAsync<List<Exam>>($"api/AvailableExams");
-        listofavailable = listofavailable.Where(x => !myexams.Contains(x.Id)).ToList();
+        await Task.Delay(200);
+        try
+        {
+            listofavailable = await http.GetFromJsonAsync<List<Exam>>($"api/AvailableExams");
+            listofavailable = listofavailable.Where(x => !myexams.Contains(x.Id)).ToList();
+        }
+        catch (Exception) { }
+
     }
     void Cancel() => _mudDialog.Close(DialogResult.Cancel());
     void ViewExamDetails(string examId)

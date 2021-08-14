@@ -26,6 +26,7 @@
         IsSaving = true;
         StateHasChanged();
         var rs = await http.PostAsJsonAsync<RegisteredStudent>($"{nav.BaseUri}api/AddStudent", data);
+        rs.EnsureSuccessStatusCode();
         if (rs.IsSuccessStatusCode)
         {
             var result = int.Parse(await rs.Content.ReadAsStringAsync());
@@ -45,47 +46,59 @@
             }
            @* var hubConnection = new HubConnectionBuilder().WithUrl($"{nav.BaseUri}hubs/applicationHub").WithAutomaticReconnect().Build();
             await hubConnection.SendAsync("NotifyRegisteredStudentPage", "INSTRUCTOR");*@
-            snackbar.Add("You have been successfully registered.");
-            await Task.Delay(1300);
-            nav.NavigateTo(nav.BaseUri, true);
+        snackbar.Add("You have been successfully registered.");
+        await Task.Delay(1300);
+        nav.NavigateTo(nav.BaseUri, true);
+        return;
+    }
+    IsSaving = false;
+    loginStatus = "You cannot register right now. Please try again later.";
+    StateHasChanged();
+}
+
+public async Task ExecuteSignIn()
+{
+    snackbar.Add("Signing in...");
+    var user = new UserAccount();
+    user.Username = data.Account.Username;
+    user.Password = data.Account.Password;
+    var rs = await http.PostAsJsonAsync<UserAccount>($"{nav.BaseUri}api/Account/SignIn", user);
+    rs.EnsureSuccessStatusCode();
+    if (rs.IsSuccessStatusCode)
+    {
+        var result = await rs.Content.ReadFromJsonAsync<UserAccount>();
+        if (result != null && !string.IsNullOrEmpty(result.Id.ToString()))
+        {
+            await Core.GetInstance().SetUser(localStorage, result);
+            await Task.Delay(1000);
+            snackbar.Configuration.SnackbarVariant = Variant.Outlined;
+            snackbar.Add($"Welcome {result.FirstName}!", Severity.Success);
+            nav.NavigateTo($"{nav.BaseUri}", true);
             return;
         }
-        IsSaving = false;
-        loginStatus = "You cannot register right now. Please try again later.";
-        StateHasChanged();
     }
+}
 
-    public async Task ExecuteSignIn()
+public string loginStatus { get; set; }
+
+public async Task OnKeyUp(KeyboardEventArgs e)
+{
+    if (e.Code == "Enter")
     {
-        snackbar.Add("Signing in...");
-        var user = new UserAccount();
-        user.Username = data.Account.Username;
-        user.Password = data.Account.Password;
-        var rs = await http.PostAsJsonAsync<UserAccount>($"{nav.BaseUri}api/Account/SignIn", user);
-        if (rs.IsSuccessStatusCode)
-        {
-            var result = await rs.Content.ReadFromJsonAsync<UserAccount>();
-            if (result != null && !string.IsNullOrEmpty(result.Id.ToString()))
-            {
-                await Core.GetInstance().SetUser(localStorage, result);
-                await Task.Delay(1000);
-                snackbar.Configuration.SnackbarVariant = Variant.Outlined;
-                snackbar.Add($"Welcome {result.FirstName}!", Severity.Success);
-                nav.NavigateTo($"{nav.BaseUri}", true);
-                return;
-            }
-        }
+        await RegisterClick();
     }
+}
 
-    public string loginStatus { get; set; }
-
-    public async Task OnKeyUp(KeyboardEventArgs e)
-    {
-        if (e.Code == "Enter")
-        {
-            await RegisterClick();
-        }
-    }
+public bool IsOK() 
+{
+    return string.IsNullOrEmpty(data.Account.FirstName)
+        || string.IsNullOrEmpty(data.Account.LastName)
+        || string.IsNullOrEmpty(data.Account.Username)
+        || string.IsNullOrEmpty(data.Account.Password)
+        || string.IsNullOrEmpty(data.Account.Address)
+        || string.IsNullOrEmpty(data.Account.ContactNumber)
+        || string.IsNullOrEmpty(data.Account.Email);
+}
 }
 
 <div class="row mt-5">
@@ -136,7 +149,7 @@
             }
             <MudToolBar Dense>
                 <MudToolBarSpacer />
-                <MudButton OnClick="RegisterClick" Disabled="IsSaving" StartIcon="@Icons.Material.Filled.Save" Variant="Variant.Filled" Color="Color.Primary">
+                <MudButton OnClick="RegisterClick" Disabled="IsSaving || IsOK()" StartIcon="@Icons.Material.Filled.Save" Variant="Variant.Filled" Color="Color.Primary">
                     @(IsSaving ? "Creating..." : "Register")
                 </MudButton>
             </MudToolBar>

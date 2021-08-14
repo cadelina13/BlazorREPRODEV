@@ -175,6 +175,29 @@ namespace BlazorREPRODEV.App.Server.Migrations
                     b.ToTable("ExamStudentRecord");
                 });
 
+            modelBuilder.Entity("BlazorREPRODEV.App.Shared.Models.Materials", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("IsRemoved")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Materials");
+                });
+
             modelBuilder.Entity("BlazorREPRODEV.App.Shared.Models.Question", b =>
                 {
                     b.Property<Guid>("Id")

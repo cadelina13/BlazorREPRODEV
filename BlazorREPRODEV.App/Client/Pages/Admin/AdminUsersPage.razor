@@ -33,7 +33,11 @@
 
     async Task LoadUsers()
     {
-        listofusers = await http.GetFromJsonAsync<List<UserAccount>>($"admin/GetUsers");
+        try
+        {
+            listofusers = await http.GetFromJsonAsync<List<UserAccount>>($"admin/GetUsers");
+        }
+        catch (Exception) { }
     }
 
     private int totalItems;
@@ -43,7 +47,12 @@
     private async Task<TableData<UserAccount>> ServerReload(TableState state)
     {
         user = await Core.GetInstance().GetUser(localStorage);
-        IEnumerable<UserAccount> data = await http.GetFromJsonAsync<List<UserAccount>>($"admin/GetUsers");
+        IEnumerable<UserAccount> data = new List<UserAccount>();
+        try
+        {
+            data = await http.GetFromJsonAsync<List<UserAccount>>($"admin/GetUsers");
+        }
+        catch (Exception) { }
         if(user != null)
         {
             data = data.Where(x => x.Username != user.Username);
@@ -90,8 +99,8 @@
         {
             IsSaving = true;
             await InvokeAsync(StateHasChanged);
-
             var post = await http.PostAsJsonAsync<UserAccount>($"admin/UpdateUser", selectedRow);
+            post.EnsureSuccessStatusCode();
             if (post.IsSuccessStatusCode)
             {
                 await table.ReloadServerData();

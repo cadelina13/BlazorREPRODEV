@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
+using Spire.Pdf.Exporting.XPS.Schema;
 using Spire.Xls;
 using System;
 using System.Collections.Generic;
@@ -31,11 +32,105 @@ namespace BlazorREPRODEV.App.Server.Controllers
             env = _env;
             AddInitialData();
         }
+        [HttpGet("DownloadMaterial/{MaterialId}/{FileName}")]
+        public IActionResult DownloadMaterial(string MaterialId, string FileName)
+        {
+            var filepath = System.IO.Path.Combine(env.WebRootPath, "reading_materials", MaterialId, FileName);
+            var fs = new FileStream(filepath, FileMode.Open);
+            return File(fs, "application/octet-stream", FileName);
+        }
+        [HttpGet("DownloadTemplate")]
+        public IActionResult DownloadTemplate()
+        {
+            var filepath = System.IO.Path.Combine(env.WebRootPath, "template", "QUESTIONNAIRE_TEMPLATE.xlsx");
+            var fs = new FileStream(filepath, FileMode.Open);
+            return File(fs, "application/octet-stream", "QUESTIONNAIRE_TEMPLATE.xlsx");
+        }
+        [HttpPost("SaveMaterial")]
+        public Materials SaveMaterial(Materials data)
+        {
+            using var db = ctx.CreateDbContext();
+            db.Materials.Add(data);
+            db.SaveChanges();
+            return data;
+        }
+        [HttpPost("UploadMaterialAttachment")]
+        public IActionResult UploadMaterialAttachment()
+        {
+            try
+            {
+                var id = Request.Headers.Where(x => x.Key == "id").Select(x => x.Value).FirstOrDefault().ToString();
+                var dir = System.IO.Path.Combine(env.WebRootPath, "reading_materials", id);
+                if (!System.IO.Directory.Exists(dir)) System.IO.Directory.CreateDirectory(dir);
+                var files = Request.Form.Files;
+                foreach (var file in files)
+                {
+                    if (file.Length > 0)
+                    {
+                        var origFileName = ContentDispositionHeaderValue.Parse(file.ContentDisposition).FileName.Trim('"');
+                        var fileName = $"{origFileName}";
+                        fileName = WebUtility.HtmlEncode(fileName);
+                        var fullPath = System.IO.Path.Combine(dir, fileName);
+                        using (var stream = new FileStream(fullPath, FileMode.Create))
+                        {
+                            file.CopyTo(stream);
+                        }
+                    }
+                    
+                }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Internal server error: {ex}");
+            }
+            return Ok();
+        }
+        [HttpGet("GetMaterialAttachments/{MaterialId}")]
+        public List<MaterialAttachmentViewModel> GetMaterialAttachments(string MaterialId)
+        {
+            var dir = System.IO.Path.Combine(env.WebRootPath, "reading_materials", MaterialId);
+            var rs = new List<MaterialAttachmentViewModel>();
+            foreach (var f in System.IO.Directory.GetFiles(dir))
+            {
+                rs.Add(new MaterialAttachmentViewModel()
+                {
+                    FileName = System.IO.Path.GetFileName(f)
+                });
+            }
+            return rs;
+        }
+        [HttpGet("GetMaterials")]
+        public List<MaterialsViewModel> GetMaterials()
+        {
+            using var db = ctx.CreateDbContext();
+            var list = db.Materials.Where(x => x.IsRemoved == 0).OrderByDescending(x=>x.DateCreated).ToList();
+            var rs = new List<MaterialsViewModel>();
+            foreach (var i in list)
+            {
+                var dir = System.IO.Path.Combine(env.WebRootPath, "reading_materials", i.Id.ToString());
+                if (!System.IO.Directory.Exists(dir)) System.IO.Directory.CreateDirectory(dir);
+                var files = System.IO.Directory.GetFiles(dir);
+                rs.Add(new MaterialsViewModel()
+                {
+                    Materials = i,
+                    NumberOfAttachement = files.Count(),
+                    Instructor = db.UserAccounts.Where(x => x.Id == i.UserId).FirstOrDefault()
+                });
+            }
+            return rs;
+        }
         [HttpGet("GetUserAccounts")]
         public List<UserAccount> GetUserAccounts()
         {
             using var db = ctx.CreateDbContext();
             return db.UserAccounts.Where(x => x.InActive == 0).ToList();
+        }
+        [HttpGet("GetUser/{userId}")]
+        public UserAccount GetUser(string userId)
+        {
+            using var db = ctx.CreateDbContext();
+            var id = Guid.Parse(userId);
+            return db.UserAccounts.Where(x => x.Id == id).FirstOrDefault();
         }
         [HttpPost("SaveNewChat")]
         public UserChat SaveNewChat(UserChat data)
@@ -395,15 +490,15 @@ namespace BlazorREPRODEV.App.Server.Controllers
             using var db = ctx.CreateDbContext();
             try
             {
-                var dir = Path.Combine(env.ContentRootPath, env.EnvironmentName, "tmp");
-                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                var dir = System.IO.Path.Combine(env.WebRootPath, "tmp");
+                if (!System.IO.Directory.Exists(dir)) System.IO.Directory.CreateDirectory(dir);
                 var file = Request.Form.Files[0];
                 if (file.Length > 0)
                 {
                     var origFileName = ContentDispositionHeaderValue.Parse(file.ContentDisposition).FileName.Trim('"');
                     var fileName = $"{Guid.NewGuid()}_{origFileName}";
                     fileName = WebUtility.HtmlEncode(fileName);
-                    var fullPath = Path.Combine(dir, fileName);
+                    var fullPath = System.IO.Path.Combine(dir, fileName);
                     using (var stream = new FileStream(fullPath, FileMode.Create))
                     {
                         file.CopyTo(stream);
@@ -436,8 +531,8 @@ namespace BlazorREPRODEV.App.Server.Controllers
             using var db = ctx.CreateDbContext();
             var _Id = Guid.Parse(componentSubjectId);
             var component = db.ComponentSubjects.Include(x => x.Questions).Where(x => x.Id == _Id).FirstOrDefault();
-            var dir = Path.Combine(env.ContentRootPath, env.EnvironmentName, "tmp");
-            var filePath = Path.Combine(dir, filename);
+            var dir = System.IO.Path.Combine(env.WebRootPath, "tmp");
+            var filePath = System.IO.Path.Combine(dir, filename);
             Workbook wb = new Workbook();
             wb.LoadFromFile(filePath);
             Worksheet wsheet = wb.Worksheets[0];
@@ -591,8 +686,6 @@ namespace BlazorREPRODEV.App.Server.Controllers
                 db.DatabaseConfigs.Update(dConfig);
                 db.SaveChanges();
             }
-
-
         }
 
     }

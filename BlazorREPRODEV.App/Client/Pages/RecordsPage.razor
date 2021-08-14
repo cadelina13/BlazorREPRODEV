@@ -16,26 +16,36 @@
     protected override async Task OnInitializedAsync()
     {
         user = await Core.GetInstance().GetUser(localStorage);
-        hubConnection = new HubConnectionBuilder().WithUrl($"{nav.BaseUri}hubs/applicationHub").WithAutomaticReconnect().Build();
-        if (hubConnection.State != HubConnectionState.Connected) await hubConnection.StartAsync();
-        hubConnection.On<string>("NotifyRegisteredStudentPage", async (userType) =>
+        try
         {
-            if (user != null)
+            hubConnection = new HubConnectionBuilder().WithUrl($"{nav.BaseUri}hubs/applicationHub").WithAutomaticReconnect().Build();
+            if (hubConnection.State != HubConnectionState.Connected) await hubConnection.StartAsync();
+            hubConnection.On<string>("NotifyRegisteredStudentPage", async (userType) =>
             {
-                if (user.UserType == userType)
+                if (user != null)
                 {
-                    loadExams();
+                    if (user.UserType == userType)
+                    {
+                        loadExams();
 
-                    await table.ReloadServerData();
-                    StateHasChanged();
+                        await table.ReloadServerData();
+                        StateHasChanged();
+                    }
                 }
-            }
-        });
+            });
+        }
+        catch (Exception) { }
+
         timer.Elapsed += async (s, e) =>
         {
             listofexamrecord = null;
             StateHasChanged();
-            listofexamrecord = await http.GetFromJsonAsync<List<ExamRecord>>($"api/GetMyExamRecords/{selectedRow.Account.Id.ToString()}");
+            try
+            {
+                listofexamrecord = await http.GetFromJsonAsync<List<ExamRecord>>($"api/GetMyExamRecords/{selectedRow.Account.Id.ToString()}");
+            }
+            catch (Exception) { }
+
             await InvokeAsync(StateHasChanged);
             timer.Stop();
         };
@@ -45,8 +55,13 @@
 
     async void loadExams()
     {
-        listofexams = null;
-        listofexams = await http.GetFromJsonAsync<List<Exam>>($"api/AvailableExams");
+        try
+        {
+            listofexams = null;
+            listofexams = await http.GetFromJsonAsync<List<Exam>>($"api/AvailableExams");
+        }
+        catch (Exception) { }
+
     }
 
     private IEnumerable<RegisteredStudent> pagedData;
@@ -58,10 +73,20 @@
 
     private async Task<TableData<RegisteredStudent>> ServerReload(TableState state)
     {
-        IEnumerable<RegisteredStudent> data = await http.GetFromJsonAsync<IEnumerable<RegisteredStudent>>("api/GetRegisteredStudent");
+        IEnumerable<RegisteredStudent> data = new List<RegisteredStudent>();
+        try
+        {
+            data = await http.GetFromJsonAsync<IEnumerable<RegisteredStudent>>("api/GetRegisteredStudent");
+        }
+        catch (Exception) { }
         if (SelectedExam != null)
         {
-            data = await http.GetFromJsonAsync<IEnumerable<RegisteredStudent>>($"api/GetRegisteredStudent/{SelectedExam.Id.ToString()}");
+            try
+            {
+                data = await http.GetFromJsonAsync<IEnumerable<RegisteredStudent>>($"api/GetRegisteredStudent/{SelectedExam.Id.ToString()}");
+            }
+            catch (Exception) { }
+
         }
         data = data.Where(element =>
         {

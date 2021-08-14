@@ -12,15 +12,31 @@
     public void Dispose() => t?.Dispose();
     protected override async Task OnInitializedAsync()
     {
-        hubConnection = new HubConnectionBuilder().WithUrl($"{nav.BaseUri}hubs/applicationHub").WithAutomaticReconnect().Build();
-        if (hubConnection.State != HubConnectionState.Connected) await hubConnection.StartAsync();
+
+        try
+        {
+            hubConnection = new HubConnectionBuilder().WithUrl($"{nav.BaseUri}hubs/applicationHub").WithAutomaticReconnect().Build();
+            if (hubConnection.State != HubConnectionState.Connected) await hubConnection.StartAsync();
+        }
+        catch (Exception) { }
+        user = await Core.GetInstance().GetUser(localStorage);
         if (user != null)
         {
-            ExamData = await http.GetFromJsonAsync<Exam>($"api/GetExamDetails/{examId}");
+
+            try
+            {
+                ExamData = await http.GetFromJsonAsync<Exam>($"api/GetExamDetails/{examId}");
+            }
+            catch (Exception) { }
             if (ExamData != null)
             {
                 string userId = user.Id.ToString();
-                _examRecord = await http.GetFromJsonAsync<List<ExamRecord>>($"api/GetExamRecord/{examId}/{userId}");
+                try
+                {
+                    _examRecord = await http.GetFromJsonAsync<List<ExamRecord>>($"api/GetExamRecord/{examId}/{userId}");
+                }
+                catch (Exception) { }
+
                 if (_examRecord != null && _examRecord.Count > 0)
                 {
                     record = _examRecord.FirstOrDefault();
@@ -72,6 +88,7 @@
                 record.Student = regStudent;
                 record.DateTaken = DateTime.Now;
                 var d = await http.PostAsJsonAsync<ExamRecord>($"api/SaveExamRecord", record);
+                d.EnsureSuccessStatusCode();
                 if (d.IsSuccessStatusCode)
                 {
                     record = await d.Content.ReadFromJsonAsync<ExamRecord>();
@@ -119,6 +136,7 @@
                 {
                     record.DateFinished = DateTime.Now;
                     var recordPostResult = await http.PostAsJsonAsync<ExamRecord>($"api/UpdateExamRecords/", record);
+                    recordPostResult.EnsureSuccessStatusCode();
                     if (recordPostResult.IsSuccessStatusCode)
                     {
                         isQuestionLoading = true;

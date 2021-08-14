@@ -21,6 +21,7 @@
         data.DateStart = _dateRange.Start.Value;
         data.DateEnd = _dateRange.End.Value;
         var d = await http.PostAsJsonAsync<Exam>($"api/AddExam", data);
+        d.EnsureSuccessStatusCode();
         if (d.IsSuccessStatusCode)
         {
             var rs = await d.Content.ReadFromJsonAsync<Exam>();

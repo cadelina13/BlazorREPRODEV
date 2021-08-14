@@ -13,7 +13,12 @@
         {
             questionsToSave.Add(q.QuestionData);
         }
-        listofsubjects = await http.GetFromJsonAsync<List<Subject>>($"api/GetSubjects");
+        try
+        {
+            listofsubjects = await http.GetFromJsonAsync<List<Subject>>($"api/GetSubjects");
+        }
+        catch (Exception) { }
+
     }
     void Cancel() => _mudDialog.Close(DialogResult.Cancel());
     async Task Submit()

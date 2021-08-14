@@ -7,28 +7,37 @@
     protected override async Task OnInitializedAsync()
     {
         user = await Core.GetInstance().GetUser(localStorage);
-        hubConnection = new HubConnectionBuilder().WithUrl($"{nav.BaseUri}hubs/applicationHub").WithAutomaticReconnect().Build();
-        if(hubConnection.State != HubConnectionState.Connected) await hubConnection.StartAsync();
-        hubConnection.On<string>("NotifyRegisteredStudentPage", async (userType) =>
+        try
         {
-            if (user != null)
+            hubConnection = new HubConnectionBuilder().WithUrl($"{nav.BaseUri}hubs/applicationHub").WithAutomaticReconnect().Build();
+            if (hubConnection.State != HubConnectionState.Connected) await hubConnection.StartAsync();
+            hubConnection.On<string>("NotifyRegisteredStudentPage", async (userType) =>
             {
-                if (user.UserType == userType)
+                if (user != null)
                 {
-                    await loadStudentRecord();
-                    StateHasChanged();
+                    if (user.UserType == userType)
+                    {
+                        await loadStudentRecord();
+                        StateHasChanged();
+                    }
                 }
-            }
 
-        });
+            });
+        }
+        catch (Exception) { }
         await loadStudentRecord();
     }
 
     async Task loadStudentRecord()
     {
         listofregistered = null;
-        await Task.Delay(1000);
-        listofregistered = await http.GetFromJsonAsync<List<RegisteredStudent>>($"api/GetRegisteredStudent");
+        await Task.Delay(200);
+        try
+        {
+            listofregistered = await http.GetFromJsonAsync<List<RegisteredStudent>>($"api/GetRegisteredStudent");
+        }
+        catch (Exception) { }
+
     }
     async Task ShowDialogAddStudent()
     {
@@ -39,7 +48,11 @@
             snackbar.Add("New student has been saved.");
             if(user != null)
             {
-                await hubConnection.SendAsync("NotifyRegisteredStudentPage", user.UserType);
+                try
+                {
+                    await hubConnection.SendAsync("NotifyRegisteredStudentPage", user.UserType);
+                }
+                catch (Exception) { }
             }
             StateHasChanged();
         }
@@ -47,18 +60,37 @@
 
     async Task AcceptStudent(Guid Id)
     {
-        await http.GetAsync($"api/AcceptStudent/{Id.ToString()}");
+        try
+        {
+            await http.GetAsync($"api/AcceptStudent/{Id.ToString()}");
+        }
+        catch (Exception) { }
+
         if (user != null)
         {
-            await hubConnection.SendAsync("NotifyRegisteredStudentPage", user.UserType);
+            try
+            {
+                await hubConnection.SendAsync("NotifyRegisteredStudentPage", user.UserType);
+            }
+            catch (Exception) { }
         }
     }
     async Task DenyStudent(Guid Id)
     {
-        await http.GetAsync($"api/DenyStudent/{Id.ToString()}");
+        try
+        {
+            await http.GetAsync($"api/DenyStudent/{Id.ToString()}");
+        }
+        catch (Exception) { }
+
         if (user != null)
         {
-            await hubConnection.SendAsync("NotifyRegisteredStudentPage", user.UserType);
+            try
+            {
+                await hubConnection.SendAsync("NotifyRegisteredStudentPage", user.UserType);
+            }
+            catch (Exception) { }
+
         }
     }
     void ShowDialogStudentProfile(UserAccount user)

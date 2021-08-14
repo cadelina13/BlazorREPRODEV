@@ -9,6 +9,7 @@
         IsSaving = true;
         StateHasChanged();
         var rs = await http.PostAsJsonAsync<Question>($"api/UpdateQuestion", data);
+        rs.EnsureSuccessStatusCode();
         var d = await rs.Content.ReadFromJsonAsync<Question>();
         data = d;
         _mudDialog.Close(DialogResult.Ok(d));
@@ -21,6 +22,7 @@
         StateHasChanged();
         data.InActive = 1;
         var rs = await http.PostAsJsonAsync<Question>($"api/UpdateQuestion", data);
+        rs.EnsureSuccessStatusCode();
         var d = await rs.Content.ReadFromJsonAsync<Question>();
         data = d;
         _mudDialog.Close(DialogResult.Ok(d));

@@ -30,7 +30,12 @@
 
     async Task LoadList()
     {
-        listofexams = await http.GetFromJsonAsync<List<Exam>>($"api/GetExams");
+        try
+        {
+            listofexams = await http.GetFromJsonAsync<List<Exam>>($"api/GetExams");
+        }
+        catch (Exception) { }
+
         if(selectedExam != null)
         {
             selectedExam = listofexams.Where(x => x.Id == selectedExam.Id).FirstOrDefault();
@@ -77,6 +82,7 @@
                 param.ListOfQuestions = listofselectedquestions;
                 param.ExamId = selectedExam.Id;
                 var updateExamResult = await http.PostAsJsonAsync<ExamViewModel>($"api/AddExamQuestion", param);
+                updateExamResult.EnsureSuccessStatusCode();
                 if (updateExamResult.IsSuccessStatusCode)
                 {
                     selectedExam = await updateExamResult.Content.ReadFromJsonAsync<Exam>();
@@ -100,6 +106,7 @@
             IsRemovingQuestion = true;
             StateHasChanged();
             var rs = await http.PostAsJsonAsync<ExamQuestion>($"api/RemoveExamQuestion", c);
+            rs.EnsureSuccessStatusCode();
             if (rs.IsSuccessStatusCode)
             {
                 var data = await rs.Content.ReadFromJsonAsync<ExamQuestion>();
@@ -130,6 +137,7 @@
                 {
                     snackbar.Add("Publishing...");
                     var d = await http.PostAsJsonAsync<Exam>($"api/PublishExam", selectedExam);
+                    d.EnsureSuccessStatusCode();
                     if (d.IsSuccessStatusCode)
                     {
                         var data = await d.Content.ReadFromJsonAsync<Exam>();
@@ -151,6 +159,7 @@
                 {
                     snackbar.Add("Removing...");
                     var d = await http.PostAsJsonAsync<Exam>($"api/RemoveExam", selectedExam);
+                    d.EnsureSuccessStatusCode();
                     if (d.IsSuccessStatusCode)
                     {
                         var data = await d.Content.ReadFromJsonAsync<Exam>();
@@ -209,7 +218,12 @@
     {
         listofexams = null;
         await Task.Delay(500);
-        listofexams = await http.GetFromJsonAsync<List<Exam>>($"api/GetExams");
+        try
+        {
+            listofexams = await http.GetFromJsonAsync<List<Exam>>($"api/GetExams");
+        }
+        catch (Exception) { }
+
         if (i == 1)
         {
             listofexams = listofexams.Where(x=>x.IsLive == 1).ToList();
