@@ -175,6 +175,10 @@
         isQuestionLoading = true;
         StateHasChanged();
         var questionsadded = await http.GetFromJsonAsync<List<ExamStudentRecord>>($"api/GetAddedQuestionsGuid/{record.Id.ToString()}");
+        var remainPrg = ExamData.ExamQuestions.Where(x => !questionsadded.Select(x => x.QuestionId).ToList().Contains(x.QuestionData.Id)).Select(x => x.QuestionData).OrderBy(x => Guid.NewGuid()).Count();
+        maxPrg = ExamData.ExamQuestions.Count;
+        valuePrg = ExamData.ExamQuestions.Count - remainPrg;
+
         if (questionsadded.Count == ExamData.ExamQuestions.Select(x => x.QuestionData).Count())
         {
             record.DateFinished = DateTime.Now;
@@ -214,6 +218,8 @@
         isQuestionLoading = false;
         StateHasChanged();
     }
+    int maxPrg = 0;
+    int valuePrg = 0;
     async Task btnNextClick()
     {
         if (string.IsNullOrEmpty(selectedAnswer))
@@ -247,6 +253,7 @@
 {
     <div class="row mb-5">
         <div class="col-xl-12">
+
             <MudExpansionPanels MultiExpansion Elevation="25">
                 <MudExpansionPanel IsExpanded HideIcon="true">
                     <TitleContent>
@@ -259,16 +266,21 @@
                         </div>
                     </TitleContent>
                     <ChildContent>
-                        <MudToolBar Dense Class="p-0">
-                            <MudText Typo="Typo.body1">@ExamData.ExamQuestions.Count items</MudText>
-                            <MudToolBarSpacer />
-                            @if (record != null)
-                            {
-                                <MudElement Class="d-flex ml-auto align-middle">
-                                    <MudText Class="ml-2">Your score: @record.Score</MudText>
-                                </MudElement>
-                            }
-                        </MudToolBar>
+                        @if (record != null && nextQuestion != null)
+                        {
+                            <MudText>Progress</MudText>
+                            <MudProgressLinear Style="height:20px" Color="Color.Primary" Min="0" Value="@valuePrg" Size="Size.Large" Max="@maxPrg" />
+                        }
+
+                        <!--<MudToolBar Dense Class="p-0">
+    <MudText Typo="Typo.body1">@ExamData.ExamQuestions.Count items</MudText>-->
+                        @* @if (record != null)
+        {
+            <MudElement Class="d-flex ml-auto align-middle">
+                <MudText Class="ml-2">Your score: @record.Score</MudText>
+            </MudElement>
+        }*@
+                        <!--</MudToolBar>-->
 
                     </ChildContent>
                 </MudExpansionPanel>
@@ -287,6 +299,7 @@
             @if (record != null && nextQuestion != null)
             {
                 <MudCard Class="p-2 mt-5" Elevation="25">
+                    
                     <MudCardContent>
                         @if (!isQuestionLoading)
                         {
@@ -367,6 +380,16 @@
 @if (showFinishedImage)
 {
     <MudPaper Style="height:67vh" Class="align-middle pt-5 mt-5" Elevation="25">
+        <MudToolBar Dense>
+            @if (record != null)
+            {
+                <MudText Typo="Typo.h5">Score: @record.Score</MudText>
+                <MudToolBarSpacer/>
+                <MudText Typo="Typo.h5">
+                    Items: @ExamData.ExamQuestions.Count
+                </MudText>
+            }
+        </MudToolBar>
         <p class="text-center mt-5">
             <MudText Typo="Typo.h5" GutterBottom="true">Your exam has been successfully finished.</MudText>
             <img style="width:270px;height:270px;" src="@($"{nav.BaseUri}img/animation_done.gif")" />
